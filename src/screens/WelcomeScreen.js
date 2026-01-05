@@ -1,8 +1,20 @@
-import { View, Text, StyleSheet } from "react-native";
-import { signOut } from "firebase/auth";
+import React, { useEffect, useState } from "react";
+import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../services/firebase";
 
-export default function WelcomeScreen({ goToLogin }) {
+const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+
+export default function WelcomeScreen({ goToLogin, goToCreate, goToCalendar }) {
+  const [userEmail, setUserEmail] = useState(auth.currentUser?.email ?? "");
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setUserEmail(user?.email ?? "");
+    });
+    return unsub;
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -15,34 +27,58 @@ export default function WelcomeScreen({ goToLogin }) {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.loggedInText}>Eingeloggt mit: {userEmail || "-"}</Text>
+
       <View style={styles.centerContent}>
-        <Text style={styles.title}>Willkommen zu unserer App</Text>
+        <View style={{ width: "100%" }}>
+          <Button title="Neuen Termin anlegen" onPress={goToCreate} />
+          <View style={{ height: 12 }} />
+          <Button title="Kalender ansehen" onPress={goToCalendar} />
+        </View>
       </View>
 
-      <Text style={styles.logoutLink} onPress={handleLogout}>
-        Logout
-      </Text>
+      {/* Logout: großer unsichtbarer Button hinter dem Text */}
+      <Pressable
+        onPress={handleLogout}
+        style={styles.bottomLeftPressable}
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+      >
+        <Text style={styles.bottomLinkText}>Logout</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   centerContent: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  logoutLink: {
+
+  loggedInText: {
     position: "absolute",
     left: 20,
-    bottom: 40,   // etwas höher, gut klickbar
+    top: 50,
+    color: "grey",
+    textDecorationLine: "underline",
+  },
+
+  bottomLeftPressable: {
+    position: "absolute",
+    left: 10,
+    bottom: BOTTOM_OFFSET,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    minWidth: 140,
+    minHeight: 56,
+    justifyContent: "center",
+  },
+
+  bottomLinkText: {
     color: "grey",
     textDecorationLine: "underline",
   },

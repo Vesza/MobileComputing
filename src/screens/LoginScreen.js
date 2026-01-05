@@ -161,11 +161,11 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 10,
-    color: "grey", // Fehlermeldungen in grau
+    color: "grey", 
   },
   link: {
     marginTop: 8,
-    color: "grey", // Resend-Link in grau
+    color: "grey", 
     textDecorationLine: "underline",
   },
 });

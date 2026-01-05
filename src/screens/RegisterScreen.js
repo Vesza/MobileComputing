@@ -138,6 +138,6 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 10,
-    color: "grey", // Fehlermeldungen in grau
+    color: "grey", 
   },
 });
