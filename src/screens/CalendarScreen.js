@@ -8,7 +8,7 @@ import {
   Platform,
   Modal,
 } from "react-native";
-import { auth, db } from "../services/firebase";
+import { auth, db } from "../services/FirebaseConfig";
 import {
   collection,
   onSnapshot,

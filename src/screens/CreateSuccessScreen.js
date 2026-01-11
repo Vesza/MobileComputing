@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet } from "react-native";
-import { auth, db } from "../services/firebase";
+import { auth, db } from "../services/FirebaseConfig";
 import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firestore";
 
 function toDateFromStrings(ddmmyyyy, hhmm) {

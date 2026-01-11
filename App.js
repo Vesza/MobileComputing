@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { View, Text } from "react-native";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./src/services/FirebaseConfig";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
@@ -12,15 +15,48 @@ import CreateSuccessScreen from "./src/screens/CreateSuccessScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
 
 export default function App() {
+  // Auth persistence state
+  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  // UI state
   const [screen, setScreen] = useState("login");
   const [verifyEmail, setVerifyEmail] = useState("");
 
-  // Termin-Draft (wird Schritt für Schritt gefüllt)
+  // Termin-Draft
   const [draft, setDraft] = useState({
     title: "",
-    date: "", // "TT.MM.JJJJ"
-    time: "", // "HH:MM"
+    date: "",
+    time: "",
   });
+
+  // Listen to Firebase auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u || null);
+      setAuthLoading(false);
+
+      // Auto-route based on session
+      if (u) {
+        // If user is logged in, skip login screen
+        setScreen((prev) => (prev === "login" || prev === "register" || prev === "verify" ? "welcome" : prev));
+      } else {
+        // If user is logged out, force them to login
+        setScreen("login");
+      }
+    });
+
+    return unsub;
+  }, []);
+
+  // While Firebase restores session, show a simple loading screen
+  if (authLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Text>Loading session...</Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -53,7 +89,6 @@ export default function App() {
         <WelcomeScreen
           goToLogin={() => setScreen("login")}
           goToCreate={() => {
-            // Draft zurücksetzen
             setDraft({ title: "", date: "", time: "" });
             setScreen("create_title");
           }}

@@ -4,7 +4,7 @@ import {
   signInWithEmailAndPassword,
   sendEmailVerification,
 } from "firebase/auth";
-import { auth, db } from "../services/firebase";
+import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-import { auth } from "../services/firebase";
+import { auth } from "../services/FirebaseConfig";
 
 const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
 
