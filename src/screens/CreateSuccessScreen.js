@@ -9,8 +9,13 @@ function toDateFromStrings(ddmmyyyy, hhmm) {
   return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
 }
 
-export default function CreateSuccessScreen({ title, date, time, goHome }) {
+export default function CreateSuccessScreen({ navigation, route }) {
   const [status, setStatus] = useState("Speichere Termin...");
+
+  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
+  const title = (draft.title ?? "").trim();
+  const date = draft.date ?? "";
+  const time = draft.time ?? "";
 
   useEffect(() => {
     const run = async () => {
@@ -21,11 +26,17 @@ export default function CreateSuccessScreen({ title, date, time, goHome }) {
           return;
         }
 
+        if (!title || !date || !time) {
+          setStatus("Ungültige Termindaten. Bitte erneut erstellen.");
+          return;
+        }
+
         const startsAt = toDateFromStrings(date, time);
 
         await addDoc(collection(db, "users", user.uid, "appointments"), {
-          title: title.trim(),
+          title,
           startsAt: Timestamp.fromDate(startsAt),
+          imageUri: draft.imageUri ?? null,
           createdAt: serverTimestamp(),
         });
 
@@ -37,7 +48,16 @@ export default function CreateSuccessScreen({ title, date, time, goHome }) {
     };
 
     run();
+    // important: this should only run when the passed draft changes
   }, [title, date, time]);
+
+  const goHome = () => {
+    // Reset so user can't go "back" and create duplicates
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Welcome" }],
+    });
+  };
 
   return (
     <View style={styles.container}>

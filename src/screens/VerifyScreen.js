@@ -1,13 +1,15 @@
 import { View, Text, Button, StyleSheet } from "react-native";
 
-export default function VerifyScreen({ email, goToLogin }) {
+export default function VerifyScreen({ navigation, route }) {
+  const email = route?.params?.email ?? "";
+
   return (
     <View style={styles.container}>
       <Text style={styles.text}>
-        Bestätigungslink wurde an{"\n"}{email} gesendet!
+        Bestätigungslink wurde an{"\n"}{email || "-"} gesendet!
       </Text>
 
-      <Button title="Weiter" onPress={goToLogin} />
+      <Button title="Weiter" onPress={() => navigation.navigate("Login")} />
     </View>
   );
 }
@@ -15,8 +17,8 @@ export default function VerifyScreen({ email, goToLogin }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",   
-    alignItems: "center",       
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   text: {

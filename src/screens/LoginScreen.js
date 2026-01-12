@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet } from "react-native";
 import {
   signInWithEmailAndPassword,
@@ -7,19 +7,22 @@ import {
 import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
-export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {
+export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
-  const [showResend, setShowResend] = useState(false); // für "Mail erneut senden"
+  const [showResend, setShowResend] = useState(false);
   const statusTimerRef = useRef(null);
 
-  // Hilfsfunktion: Status für 5 Sekunden anzeigen
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
+  }, []);
+
   const showTemporaryStatus = (message) => {
-    // alten Timer aufräumen
-    if (statusTimerRef.current) {
-      clearTimeout(statusTimerRef.current);
-    }
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+
     setStatus(message);
     statusTimerRef.current = setTimeout(() => {
       setStatus("");
@@ -38,17 +41,19 @@ export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {
       setStatus("Melde an...");
       setShowResend(false);
 
-      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
       const user = cred.user;
 
-      // Nicht verifizierte Mail -> auf Login bleiben, Hinweis + "Mail erneut senden"
       if (!user.emailVerified) {
         showTemporaryStatus("E-Mail muss noch bestätigt werden.");
         setShowResend(true);
         return;
       }
 
-      // Verifiziert -> Login in Firestore speichern
       await setDoc(
         doc(db, "users", user.uid),
         {
@@ -58,9 +63,9 @@ export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {
         { merge: true }
       );
 
-      setStatus(`Erfolgreich angemeldet als ${user.email}.`);
-      setShowResend(false);
-      goToWelcome();
+      // DO NOT navigate to Welcome here.
+      // RootNavigator will switch to AppStack automatically.
+      setStatus("");
     } catch (e) {
       console.log("Login-Fehler:", e);
 
@@ -114,6 +119,7 @@ export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {
           onChangeText={setEmail}
           style={styles.input}
         />
+
         <TextInput
           placeholder="Passwort"
           secureTextEntry
@@ -124,16 +130,20 @@ export default function LoginScreen({ goToRegister, goToVerify, goToWelcome }) {
 
         <Button title="Anmelden" onPress={handleLogin} />
         <View style={{ height: 10 }} />
-        <Button title="Registrieren" onPress={goToRegister} />
+        <Button
+          title="Registrieren"
+          onPress={() => navigation.navigate("Register")}
+        />
 
-        {/* Resend-Link: in grau und direkt unter "Registrieren" */}
         {showResend && (
-          <Text style={styles.link} onPress={handleResendMail}>
+          <Text
+            style={styles.link}
+            onPress={handleResendMail}
+          >
             Bestätigungslink erneut senden
           </Text>
         )}
 
-        {/* Status / Fehlermeldungen in grau, 5 Sekunden sichtbar */}
         {status ? <Text style={styles.status}>{status}</Text> : null}
       </View>
     </View>
@@ -161,11 +171,11 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 10,
-    color: "grey", 
+    color: "grey",
   },
   link: {
     marginTop: 8,
-    color: "grey", 
+    color: "grey",
     textDecorationLine: "underline",
   },
 });

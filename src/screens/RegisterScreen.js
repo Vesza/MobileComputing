@@ -1,25 +1,29 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet } from "react-native";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signOut,
 } from "firebase/auth";
-import { auth, db } from "../services/FirebaseConfig"
+import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
-export default function RegisterScreen({ goToLogin, goToVerify }) {
+export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [status, setStatus] = useState("");
   const statusTimerRef = useRef(null);
 
-  // Hilfsfunktion: Status/Fehlermeldung 5 Sekunden anzeigen
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
+  }, []);
+
   const showTemporaryStatus = (message) => {
-    if (statusTimerRef.current) {
-      clearTimeout(statusTimerRef.current);
-    }
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+
     setStatus(message);
     statusTimerRef.current = setTimeout(() => {
       setStatus("");
@@ -40,7 +44,7 @@ export default function RegisterScreen({ goToLogin, goToVerify }) {
     try {
       setStatus("Account wird erstellt...");
 
-      const cred = await createUserWithEmailAndPassword(auth, email, pw);
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pw);
       const user = cred.user;
 
       await setDoc(doc(db, "users", user.uid), {
@@ -53,13 +57,11 @@ export default function RegisterScreen({ goToLogin, goToVerify }) {
       await sendEmailVerification(user);
       await signOut(auth);
 
-      // Formular zurücksetzen
       setPw("");
       setPw2("");
       setStatus("");
 
-      // Screen zum "Verify" mit E-Mail
-      goToVerify(email);
+      navigation.navigate("Verify", { email: email.trim() });
     } catch (e) {
       console.log("Registrierungs-Fehler:", e);
 
@@ -109,7 +111,7 @@ export default function RegisterScreen({ goToLogin, goToVerify }) {
 
         <Button title="Weiter" onPress={handleRegister} />
         <View style={{ height: 10 }} />
-        <Button title="Zurück zum Login" onPress={goToLogin} />
+        <Button title="Zurück zum Login" onPress={() => navigation.navigate("Login")} />
 
         {status ? <Text style={styles.status}>{status}</Text> : null}
       </View>
@@ -138,6 +140,6 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 10,
-    color: "grey", 
+    color: "grey",
   },
 });

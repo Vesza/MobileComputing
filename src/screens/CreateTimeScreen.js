@@ -10,16 +10,29 @@ function formatHHMM(date) {
   return `${hh}:${mm}`;
 }
 
-export default function CreateTimeScreen({ title, date, value, setValue, goBack, goHome, goNext }) {
+export default function CreateTimeScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
+
+  // draft comes from previous screen
+  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
+  const title = draft.title ?? "";
+  const date = draft.date ?? "";
+  const value = draft.time ?? "";
 
   const handleChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
-    setValue(formatHHMM(selectedDate));
+
+    const newTime = formatHHMM(selectedDate);
+    navigation.setParams({ draft: { ...draft, time: newTime } });
   };
 
   const canContinue = value && value.length > 0;
+
+  const goNext = () => {
+    if (!canContinue) return;
+    navigation.navigate("CreateSuccess", { draft });
+  };
 
   return (
     <View style={styles.container}>
@@ -65,7 +78,7 @@ export default function CreateTimeScreen({ title, date, value, setValue, goBack,
       </View>
 
       <Pressable
-        onPress={goBack}
+        onPress={() => navigation.goBack()}
         style={[styles.bottomPressable, styles.left]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
@@ -73,7 +86,7 @@ export default function CreateTimeScreen({ title, date, value, setValue, goBack,
       </Pressable>
 
       <Pressable
-        onPress={goHome}
+        onPress={() => navigation.navigate("Welcome")}
         style={[styles.bottomPressable, styles.right]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
