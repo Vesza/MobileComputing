@@ -15,7 +15,7 @@ export default function CreateTimeScreen({ navigation, route }) {
 
   // draft comes from previous screen
   const draft = route?.params?.draft ?? { title: "", date: null, time: null };
-  const [value, setValue] = useState(draft.time ?? "");
+  const [value, setValue] = useState(draft.time ?? null);
   const title = draft.title ?? "";
   const date = draft.date ?? "";
   

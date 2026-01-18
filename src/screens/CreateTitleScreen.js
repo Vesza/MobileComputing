@@ -97,6 +97,7 @@ const pickFromGallery = async () => {
   const goNext = () => {
     if (!canContinue) return;
 
+    //Creates draft to carry Information to next screen
     navigation.navigate("CreateDate", {
       draft: {
         title: title.trim(),

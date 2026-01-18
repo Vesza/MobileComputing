@@ -12,6 +12,7 @@ import AppointmentDetailScreen from "../screens/AppointmentDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
+//Add new Screens here
 export default function AppStack() {
   return (
     <Stack.Navigator>
