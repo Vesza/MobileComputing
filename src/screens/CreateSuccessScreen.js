@@ -12,10 +12,14 @@ function toDateFromStrings(ddmmyyyy, hhmm) {
 export default function CreateSuccessScreen({ navigation, route }) {
   const [status, setStatus] = useState("Speichere Termin...");
 
-  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
+  const draft = route?.params?.draft ?? { title: "", date: null, time: null };
   const title = (draft.title ?? "").trim();
   const date = draft.date ?? "";
   const time = draft.time ?? "";
+  const description =
+  typeof draft.description === "string" ? draft.description.trim() : null;
+  const imageUri =
+  typeof draft.imageUri === "string" ? draft.imageUri : null;
 
   useEffect(() => {
     const run = async () => {
@@ -36,8 +40,9 @@ export default function CreateSuccessScreen({ navigation, route }) {
         await addDoc(collection(db, "users", user.uid, "appointments"), {
           title,
           startsAt: Timestamp.fromDate(startsAt),
-          imageUri: draft.imageUri ?? null,
           createdAt: serverTimestamp(),
+          description,
+          imageUri,
         });
 
         setStatus("Termin erfolgreich eingetragen ✅");

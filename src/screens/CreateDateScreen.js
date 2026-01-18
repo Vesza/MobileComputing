@@ -29,10 +29,17 @@ export default function CreateDateScreen({ navigation, route }) {
 
   const canContinue = value && value.length > 0;
 
-  const goNext = () => {
-    if (!canContinue) return;
-    navigation.navigate("CreateTime", { draft });
-  };
+const goNext = () => {
+  if (!canContinue) return;
+
+  navigation.navigate("CreateTime", {
+    draft: {
+      ...draft,   // keep title, imageUri, description.
+      date: value // overwrite with the selected date
+    },
+  });
+};
+
 
   const goBack = () => {
     navigation.goBack();

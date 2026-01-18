@@ -64,6 +64,8 @@ export default function CalendarScreen({ navigation }) {
               title: data.title ?? "(ohne Titel)",
               startsAt: data.startsAt?.toDate ? data.startsAt.toDate() : null,
               imageUri: typeof data.imageUri === "string" ? data.imageUri : null,
+              description: typeof data.description === "string" ? data.description : null,
+
             };
           })
           .filter((x) => x.startsAt);
@@ -126,36 +128,51 @@ export default function CalendarScreen({ navigation }) {
             <View key={g.date.toDateString()} style={styles.group}>
               <Text style={styles.groupHeader}>{formatDateHeader(g.date)}</Text>
 
-              {g.items.map((it) => (
-                <View key={it.id} style={styles.row}>
-                  <Text style={styles.time}>{formatTime(it.startsAt)}</Text>
+{g.items.map((it) => (
+  <Pressable
+    key={it.id}
+    style={styles.row}
+    onPress={() =>
+      navigation.navigate("AppointmentDetail", {
+        item: {
+          id: it.id,
+          title: it.title,
+          // pass a serializable value:
+          startsAt: it.startsAt ? it.startsAt.toISOString() : null,
+          description: it.description ?? null,
+          imageUri: it.imageUri ?? null,
+        },
+      })
+    }
+  >
+    <Text style={styles.time}>{formatTime(it.startsAt)}</Text>
 
-                  <View style={styles.divider} />
+    <View style={styles.divider} />
 
-                  {it.imageUri ? (
-                    <Pressable
-                      onPress={() => setPreviewImageUri(it.imageUri)}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={{ marginRight: 8 }}
-                    >
-                      <Image source={{ uri: it.imageUri }} style={styles.thumbnail} />
-                    </Pressable>
-                  ) : null}
+    {it.imageUri ? (
+      <Pressable
+        onPress={() => setPreviewImageUri(it.imageUri)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ marginRight: 8 }}
+      >
+        <Image source={{ uri: it.imageUri }} style={styles.thumbnail} />
+      </Pressable>
+    ) : null}
 
-                  <Text style={styles.subject} numberOfLines={2}>
-                    {it.title}
-                  </Text>
+    <Text style={styles.subject} numberOfLines={2}>
+      {it.title}
+    </Text>
 
-                  {/* Mülltonne rechts */}
-                  <Pressable
-                    onPress={() => openDeletePopup(it)}
-                    style={styles.trashPressable}
-                    hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                  >
-                    <Text style={styles.trash}>🗑️</Text>
-                  </Pressable>
-                </View>
-              ))}
+    {/* Mülltonne rechts */}
+    <Pressable
+      onPress={() => openDeletePopup(it)}
+      style={styles.trashPressable}
+      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+    >
+      <Text style={styles.trash}>🗑️</Text>
+    </Pressable>
+  </Pressable>
+  ))}
             </View>
           ))
         )}

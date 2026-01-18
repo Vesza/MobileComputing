@@ -14,11 +14,11 @@ export default function CreateTimeScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
 
   // draft comes from previous screen
-  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
+  const draft = route?.params?.draft ?? { title: "", date: null, time: null };
+  const [value, setValue] = useState(draft.time ?? "");
   const title = draft.title ?? "";
   const date = draft.date ?? "";
-  const value = draft.time ?? "";
-
+  
   const handleChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
@@ -30,9 +30,16 @@ export default function CreateTimeScreen({ navigation, route }) {
   const canContinue = value && value.length > 0;
 
   const goNext = () => {
-    if (!canContinue) return;
-    navigation.navigate("CreateSuccess", { draft });
-  };
+  if (!canContinue) return;
+
+  navigation.navigate("CreateSuccess", {
+    draft: {
+      ...draft,   // keep title, imageUri, description.
+      time: value // overwrite with the selected date
+    },
+  });
+};
+
 
   return (
     <View style={styles.container}>
