@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+// CreateTimeScreen.js
+
+import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -15,31 +17,43 @@ export default function CreateTimeScreen({ navigation, route }) {
 
   // draft comes from previous screen
   const draft = route?.params?.draft ?? { title: "", date: null, time: null };
+
+  // IMPORTANT: keep a local value for UI + button enable/disable
   const [value, setValue] = useState(draft.time ?? "");
+
   const title = draft.title ?? "";
   const date = draft.date ?? "";
-  
-const handleChange = (event, selectedDate) => {
-  if (Platform.OS === "android") setShowPicker(false);
-  if (!selectedDate) return;
 
-  const newTime = formatHHMM(selectedDate);
-  setValue(newTime); 
-};
+  // IMPORTANT: if params change (navigation.setParams), sync value again
+  useEffect(() => {
+    setValue(draft.time ?? "");
+  }, [draft.time]);
+
+  const handleChange = (event, selectedDate) => {
+    if (Platform.OS === "android") setShowPicker(false);
+    if (!selectedDate) return;
+
+    const newTime = formatHHMM(selectedDate);
+
+    // IMPORTANT: update local state so canContinue becomes true immediately
+    setValue(newTime);
+
+    // keep passing the draft forward via params
+    navigation.setParams({ draft: { ...draft, time: newTime } });
+  };
 
   const canContinue = value && value.length > 0;
 
   const goNext = () => {
-  if (!canContinue) return;
+    if (!canContinue) return;
 
-  navigation.navigate("CreateSuccess", {
-    draft: {
-      ...draft,   // keep title, imageUri, description.
-      time: value // overwrite with the selected date
-    },
-  });
-};
-
+    navigation.navigate("CreateSuccess", {
+      draft: {
+        ...draft,   // keep title, imageUri, description, date, etc.
+        time: value // overwrite with selected time
+      },
+    });
+  };
 
   return (
     <View style={styles.container}>
