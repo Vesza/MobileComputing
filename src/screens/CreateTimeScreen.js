@@ -15,17 +15,17 @@ export default function CreateTimeScreen({ navigation, route }) {
 
   // draft comes from previous screen
   const draft = route?.params?.draft ?? { title: "", date: null, time: null };
-  const [value, setValue] = useState(draft.time ?? null);
+  const [value, setValue] = useState(draft.time ?? "");
   const title = draft.title ?? "";
   const date = draft.date ?? "";
   
-  const handleChange = (event, selectedDate) => {
-    if (Platform.OS === "android") setShowPicker(false);
-    if (!selectedDate) return;
+const handleChange = (event, selectedDate) => {
+  if (Platform.OS === "android") setShowPicker(false);
+  if (!selectedDate) return;
 
-    const newTime = formatHHMM(selectedDate);
-    navigation.setParams({ draft: { ...draft, time: newTime } });
-  };
+  const newTime = formatHHMM(selectedDate);
+  setValue(newTime); 
+};
 
   const canContinue = value && value.length > 0;
 
