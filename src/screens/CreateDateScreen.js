@@ -11,16 +11,43 @@ function formatDDMMYYYY(date) {
   return `${dd}.${mm}.${yyyy}`;
 }
 
-export default function CreateDateScreen({ value, setValue, goBack, goHome, goNext }) {
+export default function CreateDateScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
+
+  // draft comes from previous screen
+  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
+  const value = draft.date ?? "";
 
   const handleChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
-    setValue(formatDDMMYYYY(selectedDate));
+
+    const newDate = formatDDMMYYYY(selectedDate);
+    // update local draft (in params we can only pass forward)
+    navigation.setParams({ draft: { ...draft, date: newDate } });
   };
 
   const canContinue = value && value.length > 0;
+
+const goNext = () => {
+  if (!canContinue) return;
+
+  navigation.navigate("CreateTime", {
+    draft: {
+      ...draft,   // keep title, imageUri, description.
+      date: value // overwrite with the selected date
+    },
+  });
+};
+
+
+  const goBack = () => {
+    navigation.goBack();
+  };
+
+  const goHome = () => {
+    navigation.navigate("Welcome");
+  };
 
   return (
     <View style={styles.container}>

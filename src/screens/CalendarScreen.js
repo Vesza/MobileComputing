@@ -7,6 +7,7 @@ import {
   Pressable,
   Platform,
   Modal,
+  Image,
 } from "react-native";
 import { auth, db } from "../services/FirebaseConfig";
 import {
@@ -33,12 +34,15 @@ function formatTime(d) {
   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function CalendarScreen({ goBack, goHome }) {
+export default function CalendarScreen({ navigation }) {
   const [items, setItems] = useState([]);
 
-  // Popup state
+  // Delete popup state
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, title } oder null
   const [deleting, setDeleting] = useState(false);
+
+  // Image preview modal state
+  const [previewImageUri, setPreviewImageUri] = useState(null);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -59,6 +63,9 @@ export default function CalendarScreen({ goBack, goHome }) {
               id: d.id,
               title: data.title ?? "(ohne Titel)",
               startsAt: data.startsAt?.toDate ? data.startsAt.toDate() : null,
+              imageUri: typeof data.imageUri === "string" ? data.imageUri : null,
+              description: typeof data.description === "string" ? data.description : null,
+
             };
           })
           .filter((x) => x.startsAt);
@@ -121,41 +128,64 @@ export default function CalendarScreen({ goBack, goHome }) {
             <View key={g.date.toDateString()} style={styles.group}>
               <Text style={styles.groupHeader}>{formatDateHeader(g.date)}</Text>
 
-              {g.items.map((it) => (
-                <View key={it.id} style={styles.row}>
-                  <Text style={styles.time}>{formatTime(it.startsAt)}</Text>
+{g.items.map((it) => (
+  <Pressable
+    key={it.id}
+    style={styles.row}
+    onPress={() =>
+      navigation.navigate("AppointmentDetail", {
+        item: {
+          id: it.id,
+          title: it.title,
+          // pass a serializable value:
+          startsAt: it.startsAt ? it.startsAt.toISOString() : null,
+          description: it.description ?? null,
+          imageUri: it.imageUri ?? null,
+        },
+      })
+    }
+  >
+    <Text style={styles.time}>{formatTime(it.startsAt)}</Text>
 
-                  <View style={styles.divider} />
+    <View style={styles.divider} />
 
-                  <Text style={styles.subject} numberOfLines={2}>
-                    {it.title}
-                  </Text>
+    {it.imageUri ? (
+      <Pressable
+        onPress={() => setPreviewImageUri(it.imageUri)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{ marginRight: 8 }}
+      >
+        <Image source={{ uri: it.imageUri }} style={styles.thumbnail} />
+      </Pressable>
+    ) : null}
 
-                  {/* Mülltonne rechts */}
-                  <Pressable
-                    onPress={() => openDeletePopup(it)}
-                    style={styles.trashPressable}
-                    hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-                  >
-                    <Text style={styles.trash}>🗑️</Text>
-                  </Pressable>
-                </View>
-              ))}
+    <Text style={styles.subject} numberOfLines={2}>
+      {it.title}
+    </Text>
+
+    {/* Mülltonne rechts */}
+    <Pressable
+      onPress={() => openDeletePopup(it)}
+      style={styles.trashPressable}
+      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+    >
+      <Text style={styles.trash}>🗑️</Text>
+    </Pressable>
+  </Pressable>
+  ))}
             </View>
           ))
         )}
       </ScrollView>
 
-      {/* Popup Overlay */}
+      {/* Delete popup */}
       <Modal
         visible={!!deleteTarget}
         transparent
         animationType="fade"
         onRequestClose={closeDeletePopup}
       >
-        {/* Hintergrund abdunkeln + click außerhalb = schließen */}
         <Pressable style={styles.modalBackdrop} onPress={closeDeletePopup}>
-          {/* Box in der Mitte; stoppt das Schließen wenn man in die Box tippt */}
           <Pressable style={styles.modalBox} onPress={() => {}}>
             <Text style={styles.modalTitle}>Termin wirklich löschen?</Text>
 
@@ -165,7 +195,6 @@ export default function CalendarScreen({ goBack, goHome }) {
 
             <View style={{ height: 14 }} />
 
-            {/* Reihe: Ja / Nein */}
             <View style={styles.modalButtonsRow}>
               <Pressable
                 onPress={confirmDelete}
@@ -197,7 +226,6 @@ export default function CalendarScreen({ goBack, goHome }) {
 
             <View style={{ height: 10 }} />
 
-            {/* Abbrechen als volle Breite */}
             <Pressable
               onPress={closeDeletePopup}
               disabled={deleting}
@@ -214,9 +242,27 @@ export default function CalendarScreen({ goBack, goHome }) {
         </Pressable>
       </Modal>
 
-      {/* unten links und unten rechts: großer unsichtbarer Button hinter den Texten */}
+      {/* Image preview modal */}
+      <Modal
+        visible={!!previewImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImageUri(null)}
+      >
+        <Pressable
+          style={styles.imageModalBackdrop}
+          onPress={() => setPreviewImageUri(null)}
+        >
+          <Image
+            source={{ uri: previewImageUri || "" }}
+            style={styles.imagePreview}
+            resizeMode="contain"
+          />
+        </Pressable>
+      </Modal>
+
       <Pressable
-        onPress={goBack}
+        onPress={() => navigation.goBack()}
         style={[styles.bottomPressable, styles.left]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
@@ -224,7 +270,7 @@ export default function CalendarScreen({ goBack, goHome }) {
       </Pressable>
 
       <Pressable
-        onPress={goHome}
+        onPress={() => navigation.navigate("Welcome")}
         style={[styles.bottomPressable, styles.right]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
@@ -243,7 +289,11 @@ const styles = StyleSheet.create({
   empty: { color: "grey", marginTop: 30, textAlign: "center" },
 
   group: { marginBottom: 18 },
-  groupHeader: { color: "grey", textDecorationLine: "underline", marginBottom: 8 },
+  groupHeader: {
+    color: "grey",
+    textDecorationLine: "underline",
+    marginBottom: 8,
+  },
 
   row: {
     flexDirection: "row",
@@ -256,7 +306,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   time: { width: 60, color: "grey", fontWeight: "bold" },
-  divider: { width: 1, height: 24, backgroundColor: "#ddd", marginHorizontal: 10 },
+  divider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#ddd",
+    marginHorizontal: 10,
+  },
+
+  thumbnail: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+  },
+
   subject: { flex: 1, fontSize: 16 },
 
   trashPressable: {
@@ -279,7 +341,7 @@ const styles = StyleSheet.create({
   left: { left: 10 },
   right: { right: 10, alignItems: "flex-end" },
 
-  // Modal
+  // Delete modal
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -304,9 +366,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: { color: "grey", textAlign: "center" },
 
-  modalButtonsRow: {
-    flexDirection: "row",
-  },
+  modalButtonsRow: { flexDirection: "row" },
 
   modalBtn: {
     paddingVertical: 12,
@@ -318,16 +378,22 @@ const styles = StyleSheet.create({
   modalBtnLeft: { marginRight: 10 },
   modalBtnFull: { flex: 0, width: "100%" },
 
-  modalBtnDanger: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
-  },
-  modalBtnNeutral: {
-    backgroundColor: "#f2f2f2",
-    borderColor: "#ddd",
-  },
+  modalBtnDanger: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
+  modalBtnNeutral: { backgroundColor: "#f2f2f2", borderColor: "#ddd" },
   modalBtnDisabled: { opacity: 0.6 },
 
   modalBtnTextWhite: { color: "white", fontWeight: "bold" },
   modalBtnTextDark: { color: "#333", fontWeight: "bold" },
+
+  // Image preview 
+  imageModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePreview: {
+    width: "95%",
+    height: "95%",
+  },
 });

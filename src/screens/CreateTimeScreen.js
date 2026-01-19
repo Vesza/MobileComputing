@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+// CreateTimeScreen.js
+
+import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -10,16 +12,48 @@ function formatHHMM(date) {
   return `${hh}:${mm}`;
 }
 
-export default function CreateTimeScreen({ title, date, value, setValue, goBack, goHome, goNext }) {
+export default function CreateTimeScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
+
+  // draft comes from previous screen
+  const draft = route?.params?.draft ?? { title: "", date: null, time: null };
+
+  // IMPORTANT: keep a local value for UI + button enable/disable
+  const [value, setValue] = useState(draft.time ?? "");
+
+  const title = draft.title ?? "";
+  const date = draft.date ?? "";
+
+  // IMPORTANT: if params change (navigation.setParams), sync value again
+  useEffect(() => {
+    setValue(draft.time ?? "");
+  }, [draft.time]);
 
   const handleChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
-    setValue(formatHHMM(selectedDate));
+
+    const newTime = formatHHMM(selectedDate);
+
+    // IMPORTANT: update local state so canContinue becomes true immediately
+    setValue(newTime);
+
+    // keep passing the draft forward via params
+    navigation.setParams({ draft: { ...draft, time: newTime } });
   };
 
   const canContinue = value && value.length > 0;
+
+  const goNext = () => {
+    if (!canContinue) return;
+
+    navigation.navigate("CreateSuccess", {
+      draft: {
+        ...draft,   // keep title, imageUri, description, date, etc.
+        time: value // overwrite with selected time
+      },
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -65,7 +99,7 @@ export default function CreateTimeScreen({ title, date, value, setValue, goBack,
       </View>
 
       <Pressable
-        onPress={goBack}
+        onPress={() => navigation.goBack()}
         style={[styles.bottomPressable, styles.left]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
@@ -73,7 +107,7 @@ export default function CreateTimeScreen({ title, date, value, setValue, goBack,
       </Pressable>
 
       <Pressable
-        onPress={goHome}
+        onPress={() => navigation.navigate("Welcome")}
         style={[styles.bottomPressable, styles.right]}
         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
       >
