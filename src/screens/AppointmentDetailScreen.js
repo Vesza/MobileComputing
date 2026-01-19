@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+const TOP_OFFSET = Platform.OS === "android" ? 52 : 62;
 
 function parseStartsAt(startsAt) {
   if (!startsAt) return null;
@@ -19,22 +20,23 @@ function parseStartsAt(startsAt) {
 }
 
 function formatDateParts(d) {
-  // "Di, 21.01.2026"
   const date = d.toLocaleDateString("de-DE", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
-  // "15:48"
   const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
   return { date, time };
 }
 
 export default function AppointmentDetailScreen({ navigation, route }) {
   const item = route?.params?.item;
-
   const [previewUri, setPreviewUri] = useState(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const startsAtDate = useMemo(() => parseStartsAt(item?.startsAt), [item?.startsAt]);
   const pretty = useMemo(() => {
@@ -62,26 +64,25 @@ export default function AppointmentDetailScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
+      {/* Titel ganz oben links */}
       <Text style={styles.headerTitle} numberOfLines={2}>
         {title}
       </Text>
 
+      {/* darunter: Datum & Uhrzeit in "Header-Kapseln" (ohne Icons) */}
       <View style={styles.metaRow}>
         <View style={styles.pill}>
-          <Text style={styles.pillIcon}>📅</Text>
           <Text style={styles.pillText}>{pretty.date}</Text>
         </View>
 
         <View style={styles.pill}>
-          <Text style={styles.pillIcon}>🕒</Text>
           <Text style={styles.pillText}>{pretty.time}</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {(hasDescription || hasImage) ? (
+        {hasDescription || hasImage ? (
           <View style={styles.detailsCard}>
-
             <View style={styles.detailsGrid}>
               {hasDescription ? (
                 <View style={styles.descBox}>
@@ -91,7 +92,6 @@ export default function AppointmentDetailScreen({ navigation, route }) {
 
               {hasImage ? (
                 <View style={styles.imageBox}>
-
                   <Pressable
                     onPress={() => setPreviewUri(item.imageUri)}
                     style={styles.imagePressable}
@@ -116,7 +116,6 @@ export default function AppointmentDetailScreen({ navigation, route }) {
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* Image Preview Modal */}
       <Modal
         visible={!!previewUri}
         transparent
@@ -124,11 +123,7 @@ export default function AppointmentDetailScreen({ navigation, route }) {
         onRequestClose={() => setPreviewUri(null)}
       >
         <Pressable style={styles.previewBackdrop} onPress={() => setPreviewUri(null)}>
-          <Image
-            source={{ uri: previewUri || "" }}
-            style={styles.previewImage}
-            resizeMode="contain"
-          />
+          <Image source={{ uri: previewUri || "" }} style={styles.previewImage} resizeMode="contain" />
         </Pressable>
       </Modal>
 
@@ -140,25 +135,21 @@ export default function AppointmentDetailScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 56, paddingHorizontal: 20, backgroundColor: "white" },
+  container: { flex: 1, paddingTop: TOP_OFFSET, paddingHorizontal: 20, backgroundColor: "white" },
 
   headerTitle: {
     fontSize: 26,
     fontWeight: "250",
     letterSpacing: 0.2,
-    marginBottom: 16,
+    marginBottom: 12,
+    textAlign: "left",
   },
 
-  metaRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 16,
-  },
+  metaRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
 
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
@@ -166,7 +157,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e5e5",
   },
-  pillIcon: { fontSize: 14 },
   pillText: { fontSize: 14, fontWeight: "700", color: "#333" },
 
   scroll: { paddingBottom: 40 },
@@ -179,21 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafafa",
   },
 
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    marginBottom: 10,
-    color: "#222",
-  },
-
-  // Balanced layout: description & image scale together
-  detailsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-
-  subLabel: { color: "grey", marginBottom: 8, fontSize: 12, fontWeight: "700" },
+  detailsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
 
   descBox: {
     flexGrow: 1,
@@ -206,10 +182,7 @@ const styles = StyleSheet.create({
   },
   descText: { fontSize: 15, lineHeight: 20, color: "#222" },
 
-  imageBox: {
-    flexGrow: 1,
-    flexBasis: 180,
-  },
+  imageBox: { flexGrow: 1, flexBasis: 180 },
   imagePressable: {
     borderWidth: 1,
     borderColor: "#eee",
@@ -232,7 +205,6 @@ const styles = StyleSheet.create({
   muted: { color: "grey", marginTop: 10 },
   mutedCenter: { color: "grey", textAlign: "center", marginTop: 10 },
 
-  // Preview modal
   previewBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.88)",

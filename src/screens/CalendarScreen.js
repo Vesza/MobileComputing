@@ -1,13 +1,15 @@
+// CalendarScreen.js
+
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   Platform,
   Modal,
   Image,
+  SectionList,
 } from "react-native";
 import { auth, db } from "../services/FirebaseConfig";
 import {
@@ -17,9 +19,17 @@ import {
   query,
   deleteDoc,
   doc,
+  where,
+  Timestamp,
 } from "firebase/firestore";
 
 const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
 
 function formatDateHeader(d) {
   return d.toLocaleDateString("de-DE", {
@@ -44,12 +54,16 @@ export default function CalendarScreen({ navigation }) {
   // Image preview modal state
   const [previewImageUri, setPreviewImageUri] = useState(null);
 
+  // ✅ Subscribe ONLY to appointments from today onwards (no past items at all)
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
 
+    const today0 = startOfDay(new Date());
+
     const q = query(
       collection(db, "users", user.uid, "appointments"),
+      where("startsAt", ">=", Timestamp.fromDate(today0)),
       orderBy("startsAt", "asc")
     );
 
@@ -65,7 +79,6 @@ export default function CalendarScreen({ navigation }) {
               startsAt: data.startsAt?.toDate ? data.startsAt.toDate() : null,
               imageUri: typeof data.imageUri === "string" ? data.imageUri : null,
               description: typeof data.description === "string" ? data.description : null,
-
             };
           })
           .filter((x) => x.startsAt);
@@ -80,14 +93,28 @@ export default function CalendarScreen({ navigation }) {
     return unsub;
   }, []);
 
-  const grouped = useMemo(() => {
+  // Group into sections by date
+  const sections = useMemo(() => {
     const map = new Map();
+
     for (const it of items) {
-      const key = it.startsAt.toDateString();
-      if (!map.has(key)) map.set(key, { date: it.startsAt, items: [] });
-      map.get(key).items.push(it);
+      const day0 = startOfDay(it.startsAt);
+      const key = day0.toISOString();
+      if (!map.has(key)) map.set(key, { date: day0, data: [] });
+      map.get(key).data.push(it);
     }
-    return Array.from(map.values()).sort((a, b) => a.date - b.date);
+
+    const arr = Array.from(map.values()).sort((a, b) => a.date - b.date);
+
+    for (const s of arr) {
+      s.data.sort((a, b) => a.startsAt - b.startsAt);
+    }
+
+    return arr.map((s) => ({
+      title: formatDateHeader(s.date),
+      date: s.date,
+      data: s.data,
+    }));
   }, [items]);
 
   const openDeletePopup = (it) => {
@@ -107,7 +134,6 @@ export default function CalendarScreen({ navigation }) {
       setDeleting(true);
 
       await deleteDoc(doc(db, "users", user.uid, "appointments", deleteTarget.id));
-
       setDeleteTarget(null);
     } catch (e) {
       console.log("Delete appointment error:", e);
@@ -116,67 +142,69 @@ export default function CalendarScreen({ navigation }) {
     }
   };
 
+  const renderItem = ({ item }) => (
+    <Pressable
+      style={styles.row}
+      onPress={() =>
+        navigation.navigate("AppointmentDetail", {
+          item: {
+            id: item.id,
+            title: item.title,
+            startsAt: item.startsAt ? item.startsAt.toISOString() : null,
+            description: item.description ?? null,
+            imageUri: item.imageUri ?? null,
+          },
+        })
+      }
+    >
+      <Text style={styles.time}>{formatTime(item.startsAt)}</Text>
+
+      <View style={styles.divider} />
+
+      {item.imageUri ? (
+        <Pressable
+          onPress={() => setPreviewImageUri(item.imageUri)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{ marginRight: 8 }}
+        >
+          <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
+        </Pressable>
+      ) : null}
+
+      <Text style={styles.subject} numberOfLines={2}>
+        {item.title}
+      </Text>
+
+      <Pressable
+        onPress={() => openDeletePopup(item)}
+        style={styles.trashPressable}
+        hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+      >
+        <Text style={styles.trash}>🗑️</Text>
+      </Pressable>
+    </Pressable>
+  );
+
+  const renderSectionHeader = ({ section }) => (
+    <Text style={styles.groupHeader}>{section.title}</Text>
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Kalender</Text>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {grouped.length === 0 ? (
-          <Text style={styles.empty}>Noch keine Termine vorhanden.</Text>
-        ) : (
-          grouped.map((g) => (
-            <View key={g.date.toDateString()} style={styles.group}>
-              <Text style={styles.groupHeader}>{formatDateHeader(g.date)}</Text>
-
-{g.items.map((it) => (
-  <Pressable
-    key={it.id}
-    style={styles.row}
-    onPress={() =>
-      navigation.navigate("AppointmentDetail", {
-        item: {
-          id: it.id,
-          title: it.title,
-          // pass a serializable value:
-          startsAt: it.startsAt ? it.startsAt.toISOString() : null,
-          description: it.description ?? null,
-          imageUri: it.imageUri ?? null,
-        },
-      })
-    }
-  >
-    <Text style={styles.time}>{formatTime(it.startsAt)}</Text>
-
-    <View style={styles.divider} />
-
-    {it.imageUri ? (
-      <Pressable
-        onPress={() => setPreviewImageUri(it.imageUri)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        style={{ marginRight: 8 }}
-      >
-        <Image source={{ uri: it.imageUri }} style={styles.thumbnail} />
-      </Pressable>
-    ) : null}
-
-    <Text style={styles.subject} numberOfLines={2}>
-      {it.title}
-    </Text>
-
-    {/* Mülltonne rechts */}
-    <Pressable
-      onPress={() => openDeletePopup(it)}
-      style={styles.trashPressable}
-      hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-    >
-      <Text style={styles.trash}>🗑️</Text>
-    </Pressable>
-  </Pressable>
-  ))}
-            </View>
-          ))
-        )}
-      </ScrollView>
+      {sections.length === 0 ? (
+        <Text style={styles.empty}>Noch keine kommenden Termine vorhanden.</Text>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(it) => it.id}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled
+          contentContainerStyle={styles.scroll}
+        />
+      )}
 
       {/* Delete popup */}
       <Modal
@@ -281,18 +309,19 @@ export default function CalendarScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20, backgroundColor: "white" },
   title: { fontSize: 22, fontWeight: "bold", marginBottom: 12 },
 
   scroll: { paddingBottom: 220 },
 
   empty: { color: "grey", marginTop: 30, textAlign: "center" },
 
-  group: { marginBottom: 18 },
   groupHeader: {
     color: "grey",
     textDecorationLine: "underline",
+    marginTop: 8,
     marginBottom: 8,
+    backgroundColor: "transparent",
   },
 
   row: {
@@ -304,6 +333,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     borderRadius: 8,
     marginBottom: 8,
+    backgroundColor: "white",
   },
   time: { width: 60, color: "grey", fontWeight: "bold" },
   divider: {
@@ -313,19 +343,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
 
-  thumbnail: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-  },
-
+  thumbnail: { width: 40, height: 40, borderRadius: 6 },
   subject: { flex: 1, fontSize: 16 },
 
-  trashPressable: {
-    marginLeft: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-  },
+  trashPressable: { marginLeft: 10, paddingHorizontal: 6, paddingVertical: 6 },
   trash: { fontSize: 18 },
 
   bottomPressable: {
@@ -358,12 +379,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 6,
-    textAlign: "center",
-  },
+  modalTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 6, textAlign: "center" },
   modalSubtitle: { color: "grey", textAlign: "center" },
 
   modalButtonsRow: { flexDirection: "row" },
@@ -385,15 +401,11 @@ const styles = StyleSheet.create({
   modalBtnTextWhite: { color: "white", fontWeight: "bold" },
   modalBtnTextDark: { color: "#333", fontWeight: "bold" },
 
-  // Image preview 
   imageModalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center",
     alignItems: "center",
   },
-  imagePreview: {
-    width: "95%",
-    height: "95%",
-  },
+  imagePreview: { width: "95%", height: "95%" },
 });
