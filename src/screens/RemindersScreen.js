@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList, Modal, Platform } from "react-native";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { View, Text, StyleSheet, Pressable, FlatList, Platform } from "react-native";
 import { auth, db } from "../services/FirebaseConfig";
 import { collection, onSnapshot, orderBy, query, deleteDoc, doc } from "firebase/firestore";
 import { cancelScheduledAsync } from "../services/notify";
+import ConfirmModal from "../components/ConfirmModal";
 
 const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
 
@@ -20,7 +21,6 @@ function formatDateTime(d) {
 export default function RemindersScreen({ navigation }) {
   const [items, setItems] = useState([]);
 
-  // Delete popup state
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, title, scheduledId } | null
   const [deleting, setDeleting] = useState(false);
 
@@ -57,52 +57,52 @@ export default function RemindersScreen({ navigation }) {
 
   const empty = useMemo(() => items.length === 0, [items]);
 
-  const openDeletePopup = (it) => {
-    setDeleteTarget({
-      id: it.id,
-      title: it.title,
-      scheduledId: it.scheduledId,
-    });
-  };
+  const openDeletePopup = useCallback((it) => {
+    setDeleteTarget({ id: it.id, title: it.title, scheduledId: it.scheduledId });
+  }, []);
 
-  const closeDeletePopup = () => {
+  const closeDeletePopup = useCallback(() => {
     if (deleting) return;
     setDeleteTarget(null);
-  };
+  }, [deleting]);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     try {
       const user = auth.currentUser;
       if (!user || !deleteTarget) return;
 
       setDeleting(true);
 
-      // 1) cancel scheduled local notification (if we stored an id)
       if (deleteTarget.scheduledId) {
         await cancelScheduledAsync(deleteTarget.scheduledId);
       }
 
-      // 2) delete firestore doc
       await deleteDoc(doc(db, "users", user.uid, "reminders", deleteTarget.id));
-
       setDeleteTarget(null);
     } catch (e) {
       console.log("Delete reminder error:", e);
     } finally {
       setDeleting(false);
     }
-  };
+  }, [deleteTarget]);
+
+  const openDetail = useCallback(
+    (it) => {
+      navigation.navigate("Detail", {
+        type: "reminder",
+        item: {
+          id: it.id,
+          title: it.title,
+          startsAt: it.startsAt ? it.startsAt.toISOString() : null,
+        },
+      });
+    },
+    [navigation]
+  );
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Reminders</Text>
-
-      <Pressable
-        style={styles.addBtn}
-        onPress={() => navigation.navigate("ReminderCreateTitle")}
-      >
-        <Text style={styles.addBtnText}>+ Neuer Reminder</Text>
-      </Pressable>
 
       {empty ? (
         <Text style={styles.empty}>Noch keine Reminders vorhanden.</Text>
@@ -112,91 +112,39 @@ export default function RemindersScreen({ navigation }) {
           keyExtractor={(x) => x.id}
           contentContainerStyle={{ paddingBottom: 120 }}
           renderItem={({ item }) => (
-            <View style={styles.row}>
+            <Pressable style={styles.row} onPress={() => openDetail(item)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle} numberOfLines={2}>
                   ⏰ {item.title}
                 </Text>
                 <Text style={styles.rowSub}>
-                  {item.startsAt ? formatDateTime(item.startsAt) : "-"} · Klingeln: {item.durationSec}s
+                  {item.startsAt ? formatDateTime(item.startsAt) : "-"}
                 </Text>
               </View>
 
               <Pressable
-                onPress={() => openDeletePopup(item)}
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  openDeletePopup(item);
+                }}
                 style={styles.trashPressable}
                 hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
               >
                 <Text style={styles.trash}>🗑️</Text>
               </Pressable>
-            </View>
+            </Pressable>
           )}
         />
       )}
 
-      {/* Delete popup */}
-      <Modal
+      <ConfirmModal
         visible={!!deleteTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDeletePopup}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={closeDeletePopup}>
-          <Pressable style={styles.modalBox} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Reminder wirklich löschen?</Text>
-
-            <Text style={styles.modalSubtitle} numberOfLines={2}>
-              {deleteTarget?.title || ""}
-            </Text>
-
-            <View style={{ height: 14 }} />
-
-            <View style={styles.modalButtonsRow}>
-              <Pressable
-                onPress={confirmDelete}
-                disabled={deleting}
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnDanger,
-                  styles.modalBtnLeft,
-                  deleting && styles.modalBtnDisabled,
-                ]}
-              >
-                <Text style={styles.modalBtnTextWhite}>
-                  {deleting ? "Lösche..." : "Ja"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={closeDeletePopup}
-                disabled={deleting}
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnNeutral,
-                  deleting && styles.modalBtnDisabled,
-                ]}
-              >
-                <Text style={styles.modalBtnTextDark}>Nein</Text>
-              </Pressable>
-            </View>
-
-            <View style={{ height: 10 }} />
-
-            <Pressable
-              onPress={closeDeletePopup}
-              disabled={deleting}
-              style={[
-                styles.modalBtn,
-                styles.modalBtnNeutral,
-                styles.modalBtnFull,
-                deleting && styles.modalBtnDisabled,
-              ]}
-            >
-              <Text style={styles.modalBtnTextDark}>Abbrechen</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        title="Reminder wirklich löschen?"
+        subtitle={deleteTarget?.title || ""}
+        loading={deleting}
+        onCancel={closeDeletePopup}
+        onConfirm={confirmDelete}
+      />
 
       <Pressable onPress={() => navigation.goBack()} style={styles.back}>
         <Text style={styles.link}>Zurück</Text>
@@ -208,18 +156,6 @@ export default function RemindersScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
   title: { fontSize: 22, fontWeight: "bold", marginBottom: 12 },
-
-  addBtn: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#f2f2f2",
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  addBtnText: { fontWeight: "800" },
-
   empty: { color: "grey", marginTop: 30, textAlign: "center" },
 
   row: {
@@ -235,11 +171,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontWeight: "800", marginBottom: 6 },
   rowSub: { color: "grey" },
 
-  trashPressable: {
-    marginLeft: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-  },
+  trashPressable: { marginLeft: 10, paddingHorizontal: 6, paddingVertical: 6 },
   trash: { fontSize: 18 },
 
   back: {
@@ -253,48 +185,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   link: { color: "grey", textDecorationLine: "underline" },
-
-  // Delete modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalBox: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  modalSubtitle: { color: "grey", textAlign: "center" },
-
-  modalButtonsRow: { flexDirection: "row" },
-
-  modalBtn: {
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    borderWidth: 1,
-    flex: 1,
-  },
-  modalBtnLeft: { marginRight: 10 },
-  modalBtnFull: { flex: 0, width: "100%" },
-
-  modalBtnDanger: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
-  modalBtnNeutral: { backgroundColor: "#f2f2f2", borderColor: "#ddd" },
-  modalBtnDisabled: { opacity: 0.6 },
-
-  modalBtnTextWhite: { color: "white", fontWeight: "bold" },
-  modalBtnTextDark: { color: "#333", fontWeight: "bold" },
 });

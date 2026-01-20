@@ -1,28 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { signOut } from "firebase/auth";
 import { auth, db } from "../services/FirebaseConfig";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-  Timestamp,
-} from "firebase/firestore";
-
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+import { collection, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore";
+import { BOTTOM_OFFSET } from "../constants/layout";
 
 function startOfTodayDate() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
 function endOfTodayDate() {
   const d = new Date();
   d.setHours(23, 59, 59, 999);
   return d;
 }
+
 function formatTodayHeader(d) {
   return d.toLocaleDateString("de-DE", {
     weekday: "long",
@@ -31,6 +25,7 @@ function formatTodayHeader(d) {
     year: "numeric",
   });
 }
+
 function formatTime(d) {
   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
@@ -53,7 +48,6 @@ export default function WelcomeScreen({ navigation }) {
 
   const [todayItems, setTodayItems] = useState([]);
 
-  // Update date display at midnight (without restarting app)
   useEffect(() => {
     const tick = setInterval(() => {
       const now = new Date();
@@ -62,7 +56,6 @@ export default function WelcomeScreen({ navigation }) {
     return () => clearInterval(tick);
   }, []);
 
-  // Subscribe to today's appointments (ALL)
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
@@ -89,6 +82,7 @@ export default function WelcomeScreen({ navigation }) {
               startsAt: data.startsAt?.toDate ? data.startsAt.toDate() : null,
               description: typeof data.description === "string" ? data.description : null,
               imageUri: typeof data.imageUri === "string" ? data.imageUri : null,
+              audioUri: typeof data.audioUri === "string" ? data.audioUri : null, // NEW
             };
           })
           .filter((x) => x.startsAt);
@@ -110,27 +104,23 @@ export default function WelcomeScreen({ navigation }) {
   };
 
   const openDetail = (it) => {
-    navigation.navigate("AppointmentDetail", {
+    navigation.navigate("Detail", {
+      type: "appointment",
       item: {
         id: it.id,
         title: it.title,
         startsAt: it.startsAt ? it.startsAt.toISOString() : null,
         description: it.description ?? null,
         imageUri: it.imageUri ?? null,
+        audioUri: it.audioUri ?? null, // NEW
       },
     });
   };
 
   return (
     <View style={styles.container}>
-      {/* Settings */}
-      <Pressable style={styles.settingsBtn} onPress={() => navigation.navigate("Settings")}>
-        <Text style={styles.topIcon}>⚙️</Text>
-      </Pressable>
-
       <Text style={styles.loggedInText}>Eingeloggt mit: {userEmail || "-"}</Text>
 
-      {/* Center content */}
       <View style={styles.centerBlock}>
         <Text style={styles.dayTitle}>{todayLabel}</Text>
 
@@ -155,14 +145,12 @@ export default function WelcomeScreen({ navigation }) {
         ) : (
           <View style={styles.emptyTodayBox}>
             <Text style={styles.sectionHeadline}>Termine</Text>
-            <Text style={styles.emptyText}>
-              Für den heutigen Tag wurde noch kein Termin zugeordnet.
-            </Text>
+            <Text style={styles.emptyText}>Für den heutigen Tag wurde noch kein Termin zugeordnet.</Text>
           </View>
         )}
       </View>
 
-      {/* 4 Buttons on one height */}
+      {/* 4 Buttons */}
       <View style={styles.bottomRow}>
         <Pressable style={styles.squareBtn} onPress={() => navigation.navigate("Calendar")}>
           <CalendarDateIcon date={todayDate} />
@@ -191,15 +179,6 @@ export default function WelcomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  settingsBtn: {
-    position: "absolute",
-    right: 16,
-    top: 44,
-    padding: 10,
-    zIndex: 10,
-  },
-  topIcon: { fontSize: 22 },
-
   loggedInText: {
     position: "absolute",
     left: 20,
@@ -208,11 +187,7 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 
-  centerBlock: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
+  centerBlock: { flex: 1, justifyContent: "center", paddingHorizontal: 20 },
 
   dayTitle: {
     fontSize: 22,
@@ -229,7 +204,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafafa",
   },
 
-  sectionHeadline: { fontSize: 18, fontWeight: "800", marginBottom: 10, textAlign: "center" },
+  sectionHeadline: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 10,
+    textAlign: "center",
+  },
 
   todayRow: {
     flexDirection: "row",
@@ -242,11 +222,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: "white",
   },
+
   todayRowTime: { width: 56, color: "grey", fontWeight: "800" },
+
   todayRowDivider: { width: 1, height: 22, backgroundColor: "#ddd", marginHorizontal: 10 },
+
   todayRowTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: "#222" },
 
-  todayHint: { marginTop: 8, color: "grey", textDecorationLine: "underline", textAlign: "center" },
+  todayHint: {
+    marginTop: 8,
+    color: "grey",
+    textDecorationLine: "underline",
+    textAlign: "center",
+  },
 
   emptyTodayBox: {
     borderWidth: 1,
@@ -255,6 +243,7 @@ const styles = StyleSheet.create({
     padding: 14,
     backgroundColor: "white",
   },
+
   emptyText: { color: "grey", textAlign: "center" },
 
   bottomRow: {
@@ -280,7 +269,6 @@ const styles = StyleSheet.create({
 
   squareTextIcon: { fontSize: 22 },
 
-  // calendar icon with day number
   calIcon: {
     width: 30,
     height: 30,
@@ -292,20 +280,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  calTopBar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 7,
-    backgroundColor: "#007AFF",
-  },
-  calDay: {
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#333",
-  },
+
+  calTopBar: { position: "absolute", top: 0, left: 0, right: 0, height: 7, backgroundColor: "#007AFF" },
+
+  calDay: { marginTop: 4, fontSize: 14, fontWeight: "900", color: "#333" },
 
   bottomLeftPressable: {
     position: "absolute",
@@ -318,8 +296,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  bottomLinkText: {
-    color: "grey",
-    textDecorationLine: "underline",
-  },
+  bottomLinkText: { color: "grey", textDecorationLine: "underline" },
 });

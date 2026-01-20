@@ -1,44 +1,23 @@
-// CreateTimeScreen.js
-
 import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
-
-function formatHHMM(date) {
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
+import BottomLinks from "../components/BottomLinks";
+import { formatHHMM } from "../utils/datetime";
 
 export default function CreateTimeScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
 
-  // draft comes from previous screen
-  const draft = route?.params?.draft ?? { title: "", date: null, time: null };
-
-  // IMPORTANT: keep a local value for UI + button enable/disable
+  const draft = route?.params?.draft ?? { kind: "appointment", title: "", date: null, time: null };
   const [value, setValue] = useState(draft.time ?? "");
 
-  const title = draft.title ?? "";
-  const date = draft.date ?? "";
-
-  // IMPORTANT: if params change (navigation.setParams), sync value again
-  useEffect(() => {
-    setValue(draft.time ?? "");
-  }, [draft.time]);
+  useEffect(() => setValue(draft.time ?? ""), [draft.time]);
 
   const handleChange = (event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
 
     const newTime = formatHHMM(selectedDate);
-
-    // IMPORTANT: update local state so canContinue becomes true immediately
     setValue(newTime);
-
-    // keep passing the draft forward via params
     navigation.setParams({ draft: { ...draft, time: newTime } });
   };
 
@@ -47,12 +26,10 @@ export default function CreateTimeScreen({ navigation, route }) {
   const goNext = () => {
     if (!canContinue) return;
 
-    navigation.navigate("CreateSuccess", {
-      draft: {
-        ...draft,   // keep title, imageUri, description, date, etc.
-        time: value // overwrite with selected time
-      },
-    });
+    const nextDraft = { ...draft, time: value };
+    const needsDuration = draft.kind === "reminder" || draft.kind === "notification";
+
+    navigation.navigate(needsDuration ? "CreateDuration" : "CreateSuccess", { draft: nextDraft });
   };
 
   return (
@@ -71,7 +48,7 @@ export default function CreateTimeScreen({ navigation, route }) {
             mode="time"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={handleChange}
-            is24Hour={true}
+            is24Hour
           />
         )}
 
@@ -84,35 +61,15 @@ export default function CreateTimeScreen({ navigation, route }) {
 
         <View style={{ height: 12 }} />
 
-        <Pressable
-          onPress={canContinue ? goNext : null}
-          style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}
-        >
-          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>
-            Weiter
-          </Text>
+        <Pressable onPress={canContinue ? goNext : null} style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}>
+          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>Weiter</Text>
         </Pressable>
-
-        <Text style={styles.summary}>
-          Termin: {title} — {date} — {value || "?"}
-        </Text>
       </View>
 
-      <Pressable
-        onPress={() => navigation.goBack()}
-        style={[styles.bottomPressable, styles.left]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Text style={styles.bottomLinkText}>Zurück</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={() => navigation.navigate("Welcome")}
-        style={[styles.bottomPressable, styles.right]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Text style={styles.bottomLinkText}>Welcome</Text>
-      </Pressable>
+      <BottomLinks
+        onLeftPress={() => navigation.goBack()}
+        onRightPress={() => navigation.navigate("Welcome")}
+      />
     </View>
   );
 }
@@ -120,42 +77,12 @@ export default function CreateTimeScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   center: { flex: 1, justifyContent: "center" },
-
   heading: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
-
-  pickBox: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
+  pickBox: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 16, alignItems: "center", marginBottom: 12 },
   clock: { fontSize: 48, marginBottom: 8 },
   pickText: { color: "grey", fontSize: 16 },
-
-  nextBtn: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
+  nextBtn: { backgroundColor: "#007AFF", paddingVertical: 12, borderRadius: 8, alignItems: "center" },
   nextBtnDisabled: { backgroundColor: "#ccc" },
   nextBtnText: { color: "white", fontWeight: "bold" },
   nextBtnTextDisabled: { color: "#888" },
-
-  summary: { marginTop: 14, color: "grey", textAlign: "center" },
-
-  bottomPressable: {
-    position: "absolute",
-    bottom: BOTTOM_OFFSET,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    minWidth: 140,
-    minHeight: 56,
-    justifyContent: "center",
-  },
-  bottomLinkText: { color: "grey", textDecorationLine: "underline" },
-  left: { left: 10 },
-  right: { right: 10, alignItems: "flex-end" },
 });

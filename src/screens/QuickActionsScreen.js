@@ -7,28 +7,19 @@ export default function QuickActionsScreen({ navigation }) {
       <View style={styles.center}>
         <Text style={styles.title}>Aktionen</Text>
 
-        <Pressable
-          style={styles.btn}
-          onPress={() => navigation.navigate("CreateTitle")}
-        >
+        <Pressable style={styles.btn} onPress={() => navigation.navigate("CreateTitle", { kind: "appointment" })}>
           <Text style={styles.btnText}>Termin hinzufügen</Text>
         </Pressable>
 
         <View style={{ height: 12 }} />
 
-        <Pressable
-          style={styles.btn}
-          onPress={() => navigation.navigate("ReminderCreateTitle")}
-        >
+        <Pressable style={styles.btn} onPress={() => navigation.navigate("CreateTitle", { kind: "reminder" })}>
           <Text style={styles.btnText}>Reminder</Text>
         </Pressable>
 
         <View style={{ height: 12 }} />
 
-        <Pressable
-          style={styles.btn}
-          onPress={() => navigation.navigate("NotificationCreateText")}
-        >
+        <Pressable style={styles.btn} onPress={() => navigation.navigate("CreateTitle", { kind: "notification" })}>
           <Text style={styles.btnText}>Quick Notification</Text>
         </Pressable>
 

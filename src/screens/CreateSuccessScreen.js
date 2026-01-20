@@ -2,27 +2,34 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet } from "react-native";
 import { auth, db } from "../services/FirebaseConfig";
 import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firestore";
-
-function toDateFromStrings(ddmmyyyy, hhmm) {
-  const [dd, mm, yyyy] = ddmmyyyy.split(".").map((x) => parseInt(x, 10));
-  const [hh, min] = hhmm.split(":").map((x) => parseInt(x, 10));
-  return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
-}
+import {
+  scheduleLocalReminderAsync,
+  scheduleLocalNotificationAsync,
+  cancelScheduledAsync,
+} from "../services/notify";
+import { clampDurationSec, toDateFromStrings } from "../utils/datetime";
 
 export default function CreateSuccessScreen({ navigation, route }) {
-  const [status, setStatus] = useState("Speichere Termin...");
+  const [status, setStatus] = useState("Speichere...");
 
-  const draft = route?.params?.draft ?? { title: "", date: null, time: null };
+  const draft = route?.params?.draft ?? { kind: "appointment" };
+  const kind = draft.kind ?? "appointment";
+
   const title = (draft.title ?? "").trim();
   const date = draft.date ?? "";
   const time = draft.time ?? "";
-  const description =
-  typeof draft.description === "string" ? draft.description.trim() : null;
-  const imageUri =
-  typeof draft.imageUri === "string" ? draft.imageUri : null;
+  const durationSec = clampDurationSec(draft.durationSec, kind === "reminder" ? 10 : 3);
+
+  const description = typeof draft.description === "string" ? draft.description.trim() : null;
+  const imageUri = typeof draft.imageUri === "string" ? draft.imageUri : null;
+
+  // NEW:
+  const audioUri = typeof draft.audioUri === "string" ? draft.audioUri : null;
 
   useEffect(() => {
     const run = async () => {
+      let scheduledId = null;
+
       try {
         const user = auth.currentUser;
         if (!user) {
@@ -31,37 +38,81 @@ export default function CreateSuccessScreen({ navigation, route }) {
         }
 
         if (!title || !date || !time) {
-          setStatus("Ungültige Termindaten. Bitte erneut erstellen.");
+          setStatus("Ungültige Daten. Bitte erneut erstellen.");
           return;
         }
 
-        const startsAt = toDateFromStrings(date, time);
+        const when = toDateFromStrings(date, time);
+        const now = new Date();
 
-        await addDoc(collection(db, "users", user.uid, "appointments"), {
-          title,
-          startsAt: Timestamp.fromDate(startsAt),
-          createdAt: serverTimestamp(),
-          description,
-          imageUri,
+        if (
+          (kind === "reminder" || kind === "notification") &&
+          when.getTime() <= now.getTime() + 10_000
+        ) {
+          setStatus("Zeitpunkt liegt zu nah in der Vergangenheit. Bitte Uhrzeit in der Zukunft wählen.");
+          return;
+        }
+
+        if (kind === "appointment") {
+          await addDoc(collection(db, "users", user.uid, "appointments"), {
+            title,
+            startsAt: Timestamp.fromDate(when),
+            createdAt: serverTimestamp(),
+            description,
+            imageUri,
+            audioUri, // <-- NEW
+          });
+          setStatus("Termin erfolgreich eingetragen ✅");
+          return;
+        }
+
+        if (kind === "reminder") {
+          scheduledId = await scheduleLocalReminderAsync({
+            title,
+            startsAtDate: when,
+            durationSec,
+          });
+
+          await addDoc(collection(db, "users", user.uid, "reminders"), {
+            title,
+            startsAt: Timestamp.fromDate(when),
+            durationSec,
+            scheduledId: String(scheduledId),
+            createdAt: serverTimestamp(),
+          });
+
+          setStatus("Reminder erfolgreich eingetragen ✅");
+          return;
+        }
+
+        // notification
+        scheduledId = await scheduleLocalNotificationAsync({
+          text: title,
+          fireAtDate: when,
+          durationSec,
         });
 
-        setStatus("Termin erfolgreich eingetragen ✅");
+        await addDoc(collection(db, "users", user.uid, "notifications"), {
+          text: title,
+          fireAt: Timestamp.fromDate(when),
+          durationSec,
+          scheduledId: String(scheduledId),
+          createdAt: serverTimestamp(),
+        });
+
+        setStatus("Notification gespeichert ✅");
       } catch (e) {
-        console.log("Save appointment error:", e);
+        console.log("CreateSuccess error:", e);
+        if (scheduledId) await cancelScheduledAsync(scheduledId);
         setStatus("Speichern fehlgeschlagen. Bitte erneut versuchen.");
       }
     };
 
     run();
-    // important: this should only run when the passed draft changes
-  }, [title, date, time]);
+  }, [kind, title, date, time, durationSec, description, imageUri, audioUri]);
 
   const goHome = () => {
-    // Reset so user can't go "back" and create duplicates
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Welcome" }],
-    });
+    navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
   };
 
   return (
