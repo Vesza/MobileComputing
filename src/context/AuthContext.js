@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onIdTokenChanged, signOut } from "firebase/auth";
 import { auth } from "../services/FirebaseConfig";
 
 const AuthContext = createContext(null);
@@ -7,10 +7,12 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onIdTokenChanged(auth, (u) => {
       setUser(u || null);
+      setEmailVerified(!!u?.emailVerified);
       setAuthLoading(false);
     });
     return unsub;
@@ -21,8 +23,8 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, authLoading, logout }),
-    [user, authLoading]
+    () => ({ user, emailVerified, authLoading, logout }),
+    [user, emailVerified, authLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

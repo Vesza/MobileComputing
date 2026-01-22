@@ -45,10 +45,13 @@ export default function LoginScreen({ navigation }) {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = cred.user;
 
+      await user.reload();
+
       if (!user.emailVerified) {
-        setPendingVerifyUser(user); //  store user
+        setPendingVerifyUser(user); // store user
         showTemporaryStatus("E-Mail muss noch bestätigt werden.");
         setShowResend(true);
+        navigation.navigate("Verify", { email: user.email ?? email.trim() });
         return;
       }
 

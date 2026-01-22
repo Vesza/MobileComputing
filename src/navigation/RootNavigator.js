@@ -6,7 +6,6 @@ import { COLORS } from "../constants";
 import AuthStack from "./AuthStack";
 import AppStack from "./AppStack";
 
-
 const navTheme = {
   ...DefaultTheme,
   colors: {
@@ -16,7 +15,7 @@ const navTheme = {
 };
 
 export default function RootNavigator() {
-  const { user, authLoading } = useAuth();
+  const { user, emailVerified, authLoading } = useAuth();
 
   if (authLoading) {
     return (
@@ -35,7 +34,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      {user ? <AppStack /> : <AuthStack />}
+      {user && emailVerified ? <AppStack /> : <AuthStack />}
     </NavigationContainer>
   );
 }

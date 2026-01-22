@@ -222,7 +222,7 @@ export default function WelcomeScreen({ navigation, route }) {
           </View>
         )}
 
-        //notification card
+        
         <View style={[UI.bordered, styles.smallCard]}>
           <View style={styles.cardHeaderRow}>
             <Pressable onPress={() => navigation.navigate("Notifications")}>
@@ -243,7 +243,7 @@ export default function WelcomeScreen({ navigation, route }) {
         </View>
       </View>
 
-      //bottom buttons
+      
       <View style={[styles.bottomRow, { bottom: LAYOUT.offsets.bottom + -40}]}>
         <Pressable
           style={[UI.bordered, styles.squareBtn]}

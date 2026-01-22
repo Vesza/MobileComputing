@@ -44,7 +44,7 @@ export default function AppStack() {
         options={{ headerShown: false }}
       />
 
-      //Create flow Appointment/Notification
+      
       <Stack.Screen name="CreateTitle" component={CreateTitleScreen} />
       <Stack.Screen name="CreateDate" component={CreateDateScreen} />
       <Stack.Screen name="CreateTime" component={CreateTimeScreen} />
