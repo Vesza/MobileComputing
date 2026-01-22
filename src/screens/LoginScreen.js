@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet } from "react-native";
-import {
-  signInWithEmailAndPassword,
-  sendEmailVerification,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [showResend, setShowResend] = useState(false);
+  const [pendingVerifyUser, setPendingVerifyUser] = useState(null); // ✅ holds user needing verification
   const statusTimerRef = useRef(null);
 
   useEffect(() => {
@@ -34,21 +33,20 @@ export default function LoginScreen({ navigation }) {
     if (!email || !password) {
       showTemporaryStatus("Bitte E-Mail und Passwort eingeben.");
       setShowResend(false);
+      setPendingVerifyUser(null);
       return;
     }
 
     try {
       setStatus("Melde an...");
       setShowResend(false);
+      setPendingVerifyUser(null);
 
-      const cred = await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = cred.user;
 
       if (!user.emailVerified) {
+        setPendingVerifyUser(user); // ✅ store for resend
         showTemporaryStatus("E-Mail muss noch bestätigt werden.");
         setShowResend(true);
         return;
@@ -63,9 +61,10 @@ export default function LoginScreen({ navigation }) {
         { merge: true }
       );
 
-      // DO NOT navigate to Welcome here.
-      // RootNavigator will switch to AppStack automatically.
       setStatus("");
+      setShowResend(false);
+      setPendingVerifyUser(null);
+      // RootNavigator will switch to AppStack automatically.
     } catch (e) {
       console.log("Login-Fehler:", e);
 
@@ -83,63 +82,64 @@ export default function LoginScreen({ navigation }) {
 
       showTemporaryStatus(message);
       setShowResend(false);
+      setPendingVerifyUser(null);
     }
   };
 
   const handleResendMail = async () => {
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        showTemporaryStatus(
-          "Bitte zuerst E-Mail und Passwort eingeben und anmelden."
-        );
+      if (!pendingVerifyUser) {
+        showTemporaryStatus("Bitte zuerst anmelden.");
         return;
       }
 
-      await sendEmailVerification(user);
+      await sendEmailVerification(pendingVerifyUser);
       showTemporaryStatus("Bestätigungsmail erneut gesendet.");
     } catch (e) {
       console.log("Resend-Fehler:", e);
-      showTemporaryStatus(
-        "Konnte Bestätigungsmail nicht senden. Bitte später erneut versuchen."
-      );
+      showTemporaryStatus("Konnte Bestätigungsmail nicht senden. Bitte später erneut versuchen.");
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        UI.screen,
+        styles.container,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
       <View style={styles.box}>
         <Text style={styles.heading}>Login</Text>
 
         <TextInput
           placeholder="E-Mail"
+          placeholderTextColor={COLORS.textMuted}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
-          style={styles.input}
+          style={[UI.bordered, styles.input]}
         />
 
         <TextInput
           placeholder="Passwort"
+          placeholderTextColor={COLORS.textMuted}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
-          style={styles.input}
+          style={[UI.bordered, styles.input]}
         />
 
         <Button title="Anmelden" onPress={handleLogin} />
         <View style={{ height: 10 }} />
-        <Button
-          title="Registrieren"
-          onPress={() => navigation.navigate("Register")}
-        />
+        <Button title="Registrieren" onPress={() => navigation.navigate("Register")} />
 
         {showResend && (
-          <Text
-            style={styles.link}
-            onPress={handleResendMail}
-          >
+          <Text style={styles.link} onPress={handleResendMail}>
             Bestätigungslink erneut senden
           </Text>
         )}
@@ -152,30 +152,30 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     justifyContent: "center",
-    padding: 20,
+    paddingHorizontal: 20,
   },
   box: {},
   heading: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
     marginBottom: 12,
+    color: COLORS.text,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 8,
+    padding: 10,
     marginBottom: 10,
-    borderRadius: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
   },
   status: {
     marginTop: 10,
-    color: "grey",
+    color: COLORS.textMuted,
   },
   link: {
     marginTop: 8,
-    color: "grey",
+    color: COLORS.textMuted,
     textDecorationLine: "underline",
   },
 });

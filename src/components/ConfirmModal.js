@@ -1,5 +1,6 @@
 import React from "react";
 import { Modal, Pressable, Text, View, StyleSheet } from "react-native";
+import { COLORS } from "../constants";
 
 export default function ConfirmModal({
   visible,
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
   box: {
     width: "100%",
     maxWidth: 360,
-    backgroundColor: "white",
+    backgroundColor: COLORS.background,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,

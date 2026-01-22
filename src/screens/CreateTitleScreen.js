@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 import { saveImageToLocalAppStorageAsync } from "../services/localImages";
 import { saveAudioToLocalAppStorageAsync } from "../services/localAudio";
-import BottomLinks from "../components/BottomLinks";
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function CreateTitleScreen({ navigation, route }) {
   const kind = route?.params?.kind ?? "appointment";
@@ -37,20 +37,27 @@ export default function CreateTitleScreen({ navigation, route }) {
   const [descOpen, setDescOpen] = useState(false);
   const [descDraft, setDescDraft] = useState("");
 
-  // NEW: audio memo (appointment-only)
+  // audio memo (appointment-only)
   const [audioUri, setAudioUri] = useState(null);
   const [memoOpen, setMemoOpen] = useState(false);
-  const [recording, setRecording] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
 
-  const soundRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // NEW: details sheet
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const canContinue = title.trim().length > 0;
 
+  // playback + recording refs (avoid stale closure bugs)
+  const soundRef = useRef(null);
+  const recordingRef = useRef(null);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // --------------------
+  // Cleanup on unmount
+  // --------------------
   useEffect(() => {
     return () => {
-      // cleanup sound + recording on unmount
       (async () => {
         try {
           if (soundRef.current) {
@@ -59,20 +66,21 @@ export default function CreateTitleScreen({ navigation, route }) {
             soundRef.current = null;
           }
         } catch {}
+
         try {
-          if (recording) {
-            await recording.stopAndUnloadAsync();
+          if (recordingRef.current) {
+            await recordingRef.current.stopAndUnloadAsync();
+            recordingRef.current = null;
           }
         } catch {}
       })();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --------------------
   // Image handling
   // --------------------
-  const pickFromGallery = async () => {
+  const pickFromGallery = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
@@ -106,39 +114,55 @@ export default function CreateTitleScreen({ navigation, route }) {
       console.log("Gallery picker error:", e);
       Alert.alert("Fehler", String(e?.message || e));
     }
-  };
+  }, []);
 
-  const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (perm.status !== "granted") {
-      Alert.alert("Kamera benötigt", "Bitte erlaube Zugriff auf die Kamera.");
-      return;
+  const takePhoto = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (perm.status !== "granted") {
+        Alert.alert("Kamera benötigt", "Bitte erlaube Zugriff auf die Kamera.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+      if (result.canceled) return;
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) return;
+
+      const saved = await saveImageToLocalAppStorageAsync(uri);
+      setImageUri(saved);
+    } catch (e) {
+      console.log("Camera error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
     }
+  }, []);
 
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-    if (result.canceled) return;
-
-    const uri = result.assets?.[0]?.uri;
-    if (!uri) return;
-
-    const saved = await saveImageToLocalAppStorageAsync(uri);
-    setImageUri(saved);
-  };
-
-  const chooseImageSource = () => {
+  const chooseImageSource = useCallback(() => {
     Alert.alert("Bild hinzufügen", "Quelle auswählen", [
       { text: "Kamera", onPress: takePhoto },
       { text: "Galerie", onPress: pickFromGallery },
       { text: "Abbrechen", style: "cancel" },
     ]);
-  };
+  }, [pickFromGallery, takePhoto]);
 
   // --------------------
-  // NEW: Audio memo handling
+  // Audio memo handling
   // --------------------
-  const openMemo = () => setMemoOpen(true);
+  const stopPlayback = useCallback(async () => {
+    try {
+      if (!soundRef.current) {
+        setIsPlaying(false);
+        return;
+      }
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    } catch {}
+    setIsPlaying(false);
+  }, []);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
@@ -146,7 +170,6 @@ export default function CreateTitleScreen({ navigation, route }) {
         return;
       }
 
-      // stop playback if any
       await stopPlayback();
 
       await Audio.setAudioModeAsync({
@@ -159,26 +182,27 @@ export default function CreateTitleScreen({ navigation, route }) {
       await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await rec.startAsync();
 
-      setRecording(rec);
+      recordingRef.current = rec;
       setIsRecording(true);
     } catch (e) {
       console.log("startRecording error:", e);
       Alert.alert("Fehler", String(e?.message || e));
       setIsRecording(false);
-      setRecording(null);
+      recordingRef.current = null;
     }
-  };
+  }, [stopPlayback]);
 
-  const stopRecording = async () => {
+  const stopRecording = useCallback(async () => {
     try {
-      if (!recording) return;
+      if (!recordingRef.current) return;
 
       setIsRecording(false);
 
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      const rec = recordingRef.current;
+      recordingRef.current = null;
 
-      setRecording(null);
+      await rec.stopAndUnloadAsync();
+      const uri = rec.getURI();
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -197,15 +221,14 @@ export default function CreateTitleScreen({ navigation, route }) {
       console.log("stopRecording error:", e);
       Alert.alert("Fehler", String(e?.message || e));
       setIsRecording(false);
-      setRecording(null);
+      recordingRef.current = null;
     }
-  };
+  }, []);
 
-  const playMemo = async () => {
+  const togglePlay = useCallback(async () => {
     try {
       if (!audioUri) return;
 
-      // if already playing -> stop
       if (isPlaying) {
         await stopPlayback();
         return;
@@ -228,33 +251,58 @@ export default function CreateTitleScreen({ navigation, route }) {
         }
       });
     } catch (e) {
-      console.log("playMemo error:", e);
+      console.log("togglePlay error:", e);
       Alert.alert("Fehler", String(e?.message || e));
     }
-  };
+  }, [audioUri, isPlaying, stopPlayback]);
 
-  const stopPlayback = async () => {
-    try {
-      if (!soundRef.current) {
-        setIsPlaying(false);
-        return;
-      }
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
-      soundRef.current = null;
-    } catch {}
-    setIsPlaying(false);
-  };
-
-  const removeMemo = async () => {
+  const removeMemo = useCallback(async () => {
     await stopPlayback();
     setAudioUri(null);
-  };
+  }, [stopPlayback]);
+
+  // --------------------
+  // Description modal helpers
+  // --------------------
+  const openDescription = useCallback(() => {
+    setDescDraft(description || "");
+    setDescOpen(true);
+  }, [description]);
+
+  const saveDescription = useCallback(() => {
+    setDescription(descDraft.trim());
+    setDescOpen(false);
+  }, [descDraft]);
+
+  // --------------------
+  // Details sheet helpers
+  // --------------------
+  const openDetailsSheet = useCallback(() => {
+    if (!isAppointment) return;
+    setDetailsOpen(true);
+  }, [isAppointment]);
+
+  const closeDetailsSheet = useCallback(() => setDetailsOpen(false), []);
+
+  const openDescriptionFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    openDescription();
+  }, [openDescription]);
+
+  const openImageFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    chooseImageSource();
+  }, [chooseImageSource]);
+
+  const openMemoFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    setMemoOpen(true);
+  }, []);
 
   // --------------------
   // Continue
   // --------------------
-  const goNext = () => {
+  const goNext = useCallback(() => {
     if (!canContinue) return;
 
     navigation.navigate("CreateDate", {
@@ -271,302 +319,398 @@ export default function CreateTitleScreen({ navigation, route }) {
         audioUri: isAppointment ? audioUri ?? null : null,
       },
     });
-  };
+  }, [canContinue, navigation, kind, title, isAppointment, imageUri, description, audioUri]);
+
+  // --------------------
+  // UI flags
+  // --------------------
+  const showExtrasSummary = isAppointment && (imageUri || description?.trim() || audioUri);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.center}>
-        <Text style={styles.heading}>{headline}</Text>
+    <View
+      style={[
+        UI.screen,
+        styles.container,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
+      <Text style={styles.headline}>{headline}</Text>
 
-        <TextInput
-          placeholder={isAppointment ? "Titel" : "Text"}
-          value={title}
-          onChangeText={setTitle}
-          style={[styles.input, isNotification && styles.inputMulti]}
-          multiline={isNotification}
-          textAlignVertical={isNotification ? "top" : "auto"}
-        />
+      <TextInput
+        value={title}
+        onChangeText={setTitle}
+        placeholder={isAppointment ? "Titel" : isReminder ? "Reminder Text" : "Notification Text"}
+        placeholderTextColor={COLORS.textMuted}
+        style={[UI.bordered, styles.input]}
+      />
 
-        {isAppointment && imageUri ? (
-          <>
-            <View style={{ height: 12 }} />
-            <Image source={{ uri: imageUri }} style={styles.preview} />
-            <View style={{ height: 8 }} />
-            <Pressable onPress={() => setImageUri(null)}>
-              <Text style={styles.removeLink}>Bild entfernen</Text>
-            </Pressable>
-          </>
-        ) : null}
+      <Pressable
+        onPress={canContinue ? goNext : null}
+        style={[UI.primaryButton, !canContinue && UI.primaryButtonDisabled]}
+      >
+        <Text style={[UI.primaryButtonText, !canContinue && UI.primaryButtonTextDisabled]}>
+          Weiter
+        </Text>
+      </Pressable>
 
-        {isAppointment && audioUri ? (
-          <>
-            <View style={{ height: 14 }} />
-            <View style={styles.audioRow}>
-              <Pressable onPress={playMemo} style={styles.audioBtn}>
-                <Text style={styles.audioBtnText}>{isPlaying ? "Stop" : "Play"}</Text>
-              </Pressable>
-              <Text style={styles.audioHint} numberOfLines={1}>
-                Sprachmemo hinzugefügt
-              </Text>
-              <Pressable onPress={removeMemo} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.removeLink}>Entfernen</Text>
-              </Pressable>
-            </View>
-          </>
-        ) : null}
-
-        <View style={{ height: 14 }} />
-
-        <Pressable
-          onPress={canContinue ? goNext : null}
-          style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}
-        >
-          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>
-            Weiter
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Appointment-only FABs (JETZT 3 STÜCK) */}
+      {/* Single + button (Appointment only) */}
       {isAppointment ? (
-        <View style={styles.fabContainer}>
-          {/* Bild */}
-          <Pressable style={styles.fabButton} onPress={chooseImageSource}>
-            <Text style={styles.fabIcon}>🖼️</Text>
-          </Pressable>
-
-          {/* Beschreibung */}
+        <View style={styles.detailsRow}>
           <Pressable
-            style={styles.fabButton}
-            onPress={() => {
-              setDescDraft(description);
-              setDescOpen(true);
-            }}
+            onPress={openDetailsSheet}
+            style={[UI.bordered, styles.squareBtn]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.fabIcon}>📝</Text>
+            <Text style={styles.squareTextIcon}>＋</Text>
           </Pressable>
 
-          {/* NEW: Memo */}
-          <Pressable style={styles.fabButton} onPress={openMemo}>
-            <Text style={styles.fabIcon}>🎙️</Text>
-          </Pressable>
+          {/* Optional: small summary (no "Keine ..." spam) */}
+          {showExtrasSummary ? (
+            <View style={[UI.bordered, styles.summaryCard]}>
+              {description?.trim() ? <Text style={styles.summaryLine}>✓ Beschreibung</Text> : null}
+              {imageUri ? <Text style={styles.summaryLine}>✓ Bild</Text> : null}
+              {audioUri ? <Text style={styles.summaryLine}>✓ Sprachmemo</Text> : null}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
-      {/* Description modal (appointment-only) */}
+      {/* -------------------- Details Bottom Sheet -------------------- */}
+      <Modal
+        visible={detailsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDetailsSheet}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={closeDetailsSheet}>
+          <Pressable style={[UI.bordered, styles.sheet]} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Details hinzufügen</Text>
+
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openDescriptionFromSheet}>
+              <Text style={styles.sheetItemText}>📝 Beschreibung</Text>
+            </Pressable>
+
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openImageFromSheet}>
+              <Text style={styles.sheetItemText}>🖼️ Bild</Text>
+            </Pressable>
+
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openMemoFromSheet}>
+              <Text style={styles.sheetItemText}>🎙️ Sprachmemo</Text>
+            </Pressable>
+
+            <View style={{ height: 8 }} />
+
+            <Pressable style={[UI.bordered, styles.sheetCancel]} onPress={closeDetailsSheet}>
+              <Text style={styles.sheetCancelText}>Abbrechen</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* -------------------- Description Modal -------------------- */}
       <Modal
         visible={descOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setDescOpen(false)}
       >
-        <View style={styles.descBackdrop}>
-          <View style={styles.descSheet}>
-            <Text style={styles.descTitle}>Notizen</Text>
+        <Pressable style={styles.modalBackdrop} onPress={() => setDescOpen(false)}>
+          <Pressable style={[UI.bordered, styles.modalBox]} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Beschreibung</Text>
 
             <TextInput
               value={descDraft}
               onChangeText={setDescDraft}
-              placeholder="Schreibe hier deine Beschreibung..."
+              placeholder="Beschreibung hinzufügen…"
+              placeholderTextColor={COLORS.textMuted}
+              style={[UI.bordered, styles.descInput]}
               multiline
-              textAlignVertical="top"
-              style={styles.descInput}
             />
 
-            <View style={styles.descButtonsRow}>
-              <Pressable
-                style={[styles.descBtn, styles.descBtnSecondary]}
-                onPress={() => setDescOpen(false)}
-              >
-                <Text style={styles.descBtnTextDark}>Abbrechen</Text>
+            <View style={styles.modalRow}>
+              <Pressable style={[UI.bordered, styles.modalBtn]} onPress={() => setDescOpen(false)}>
+                <Text style={styles.modalBtnText}>Abbrechen</Text>
               </Pressable>
 
-              <Pressable
-                style={[styles.descBtn, styles.descBtnPrimary]}
-                onPress={() => {
-                  setDescription(descDraft.trim());
-                  setDescOpen(false);
-                }}
-              >
-                <Text style={styles.descBtnTextWhite}>Speichern</Text>
+              <Pressable style={[UI.primaryButton, styles.modalBtn]} onPress={saveDescription}>
+                <Text style={UI.primaryButtonText}>Speichern</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* NEW: Memo modal */}
+      {/* -------------------- Memo Modal -------------------- */}
       <Modal
         visible={memoOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          if (!isRecording) setMemoOpen(false);
-        }}
+        onRequestClose={() => setMemoOpen(false)}
       >
-        <View style={styles.descBackdrop}>
-          <View style={styles.descSheet}>
-            <Text style={styles.descTitle}>Sprachmemo</Text>
-
-            <Text style={styles.memoStatus}>
-              {isRecording ? "Aufnahme läuft…" : audioUri ? "Memo bereit" : "Noch keine Memo"}
-            </Text>
-
-            <View style={{ height: 14 }} />
-
-            <View style={styles.memoButtonsRow}>
-              {!isRecording ? (
-                <Pressable style={[styles.descBtn, styles.descBtnPrimary]} onPress={startRecording}>
-                  <Text style={styles.descBtnTextWhite}>Aufnehmen</Text>
-                </Pressable>
-              ) : (
-                <Pressable style={[styles.descBtn, styles.descBtnPrimary]} onPress={stopRecording}>
-                  <Text style={styles.descBtnTextWhite}>Stop</Text>
-                </Pressable>
-              )}
-
-              <Pressable
-                style={[styles.descBtn, styles.descBtnSecondary]}
-                onPress={audioUri ? playMemo : null}
-              >
-                <Text style={styles.descBtnTextDark}>{isPlaying ? "Stop" : "Play"}</Text>
-              </Pressable>
-            </View>
+        <Pressable style={styles.modalBackdrop} onPress={() => setMemoOpen(false)}>
+          <Pressable style={[UI.bordered, styles.modalBox]} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Sprachmemo</Text>
 
             <View style={{ height: 10 }} />
 
-            <View style={styles.memoButtonsRow}>
-              <Pressable
-                style={[styles.descBtn, styles.descBtnSecondary]}
-                onPress={audioUri ? removeMemo : null}
-              >
-                <Text style={styles.descBtnTextDark}>Entfernen</Text>
-              </Pressable>
+            <Pressable
+              onPress={isRecording ? stopRecording : startRecording}
+              style={[UI.primaryButton, styles.fullBtn]}
+            >
+              <Text style={UI.primaryButtonText}>
+                {isRecording ? "Stop Aufnahme" : "Aufnehmen"}
+              </Text>
+            </Pressable>
 
-              <Pressable
-                style={[styles.descBtn, styles.descBtnSecondary]}
-                onPress={() => {
-                  if (!isRecording) setMemoOpen(false);
-                }}
-              >
-                <Text style={styles.descBtnTextDark}>Schließen</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+            <View style={{ height: 10 }} />
+
+            <Pressable
+              onPress={togglePlay}
+              disabled={!audioUri || isRecording}
+              style={[
+                UI.bordered,
+                styles.fullBtn,
+                (!audioUri || isRecording) && styles.btnDisabled,
+              ]}
+            >
+              <Text style={styles.modalBtnText}>
+                {isPlaying ? "Stop" : "Play"}
+              </Text>
+            </Pressable>
+
+            <View style={{ height: 10 }} />
+
+            <Pressable
+              onPress={removeMemo}
+              disabled={!audioUri || isRecording}
+              style={[
+                UI.bordered,
+                styles.fullBtn,
+                (!audioUri || isRecording) && styles.btnDisabled,
+              ]}
+            >
+              <Text style={styles.modalBtnText}>Memo entfernen</Text>
+            </Pressable>
+
+            <View style={{ height: 12 }} />
+
+            <Pressable style={[UI.bordered, styles.sheetCancel]} onPress={() => setMemoOpen(false)}>
+              <Text style={styles.sheetCancelText}>Schließen</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      <BottomLinks
-        onLeftPress={() => navigation.goBack()}
-        onRightPress={() => navigation.navigate("Welcome")}
-      />
+      {/* Optional inline image preview under everything (kept minimal) */}
+      {isAppointment && imageUri ? (
+        <View style={[UI.bordered, styles.previewCard]}>
+          <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          <Pressable onPress={() => setImageUri(null)} style={styles.removePill}>
+            <Text style={styles.removePillText}>Entfernen</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
+  container: {
+    paddingHorizontal: 20,
+    flex: 1,
+    justifyContent: "center",
+  },
 
-  heading: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
+  headline: {
+    textAlign: "center",
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+    marginBottom: 14,
+  },
 
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 10,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    padding: 12,
+    borderRadius: 12,
     marginBottom: 12,
-    borderRadius: 8,
   },
-  inputMulti: { height: 180 },
 
-  preview: { width: 180, height: 180, borderRadius: 12, alignSelf: "center" },
-  removeLink: { color: "grey", textDecorationLine: "underline", textAlign: "center" },
-
-  audioRow: {
-    flexDirection: "row",
+  detailsRow: {
+    marginTop: 18,
     alignItems: "center",
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: "#fafafa",
   },
-  audioBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#007AFF",
-    borderWidth: 1,
-    borderColor: "#007AFF",
-  },
-  audioBtnText: { color: "white", fontWeight: "800" },
-  audioHint: { flex: 1, color: "#333", fontWeight: "700" },
 
-  fabContainer: {
-    position: "absolute",
-    right: 20,
-    bottom: 150,
-    flexDirection: "row",
-    gap: 12,
-  },
-  fabButton: {
+  squareBtn: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: "#f2f2f2",
+    backgroundColor: COLORS.surface,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ddd",
   },
-  fabIcon: { fontSize: 24 },
 
-  descBackdrop: {
+  squareTextIcon: {
+    fontSize: 22,
+    color: COLORS.text,
+  },
+
+  summaryCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    minWidth: 160,
+  },
+
+  summaryLine: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    textAlign: "center",
+  },
+
+  // Sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.25)",
+    justifyContent: "flex-end",
+    padding: 14,
+  },
+
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 14,
+  },
+
+  sheetTitle: {
+    fontSize: FONT_SIZE.heading,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+
+  sheetItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 10,
+  },
+
+  sheetItemText: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+  },
+
+  sheetCancel: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#f2f2f2",
+    alignItems: "center",
+  },
+
+  sheetCancelText: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textMuted,
+  },
+
+  // Modals
+  modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 18,
   },
-  descSheet: {
+
+  modalBox: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "white",
-    borderRadius: 14,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "#ddd",
   },
-  descTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 10, textAlign: "center" },
+
+  modalTitle: {
+    textAlign: "center",
+    fontSize: FONT_SIZE.heading,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+  },
+
   descInput: {
-    height: 260,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
+    marginTop: 12,
+    minHeight: 120,
+    textAlignVertical: "top",
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
     padding: 12,
-    fontSize: 16,
-    backgroundColor: "#fafafa",
+    borderRadius: 12,
   },
-  descButtonsRow: { flexDirection: "row", gap: 10, marginTop: 12 },
 
-  descBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: "center", borderWidth: 1 },
-  descBtnPrimary: { backgroundColor: "#007AFF", borderColor: "#007AFF" },
-  descBtnSecondary: { backgroundColor: "#f2f2f2", borderColor: "#ddd" },
-  descBtnTextWhite: { color: "white", fontWeight: "bold" },
-  descBtnTextDark: { color: "#333", fontWeight: "bold" },
+  modalRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
 
-  memoStatus: { textAlign: "center", color: "grey", fontWeight: "700" },
-  memoButtonsRow: { flexDirection: "row", gap: 10 },
-
-  nextBtn: {
-    backgroundColor: "#007AFF",
+  modalBtn: {
+    flex: 1,
+    borderRadius: 12,
     paddingVertical: 12,
-    borderRadius: 8,
     alignItems: "center",
   },
-  nextBtnDisabled: { backgroundColor: "#ccc" },
-  nextBtnText: { color: "white", fontWeight: "bold" },
-  nextBtnTextDisabled: { color: "#888" },
+
+  modalBtnText: {
+    color: COLORS.text,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+
+  fullBtn: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+
+  btnDisabled: {
+    opacity: 0.5,
+  },
+
+  // Image preview
+  previewCard: {
+    marginTop: 18,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: COLORS.surface,
+  },
+
+  previewImage: {
+    width: "100%",
+    height: 140,
+  },
+
+  removePill: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+
+  removePillText: {
+    color: COLORS.text,
+    fontWeight: FONT_WEIGHT.bold,
+  },
 });

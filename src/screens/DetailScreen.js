@@ -7,12 +7,9 @@ import {
   Image,
   Modal,
   ScrollView,
-  Platform,
 } from "react-native";
 import { Audio } from "expo-av";
-
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
-const TOP_OFFSET = Platform.OS === "android" ? 52 : 62;
+import { UI, LAYOUT, COLORS, FONT_WEIGHT, FONT_SIZE } from "../constants";
 
 function parseDateAny(x) {
   if (!x) return null;
@@ -59,7 +56,7 @@ export default function DetailScreen({ navigation, route }) {
 
   const [previewUri, setPreviewUri] = useState(null);
 
-  // NEW: audio playback
+  // audio playback
   const soundRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -92,7 +89,7 @@ export default function DetailScreen({ navigation, route }) {
         datetime: startsAt,
         description: typeof item.description === "string" ? item.description.trim() : "",
         imageUri: typeof item.imageUri === "string" && item.imageUri.length ? item.imageUri : null,
-        audioUri: typeof item.audioUri === "string" && item.audioUri.length ? item.audioUri : null, // NEW
+        audioUri: typeof item.audioUri === "string" && item.audioUri.length ? item.audioUri : null,
       };
     }
 
@@ -173,13 +170,19 @@ export default function DetailScreen({ navigation, route }) {
 
   if (!normalized) {
     return (
-      <View style={styles.container}>
+      <View
+        style={[
+          UI.screen,
+          {
+            paddingTop: LAYOUT.offsets.top,
+            paddingBottom: LAYOUT.offsets.bottom,
+          },
+        ]}
+      >
         <Text style={styles.headerTitle}>Detail</Text>
         <Text style={styles.muted}>Kein Element übergeben.</Text>
 
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>Zurück</Text>
-        </Pressable>
+
       </View>
     );
   }
@@ -190,7 +193,15 @@ export default function DetailScreen({ navigation, route }) {
   const showAudio = isAppointment && !!normalized.audioUri;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        UI.screen,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
       <Text style={styles.smallHeader}>{headerLabel}</Text>
 
       <Text style={styles.headerTitle} numberOfLines={2}>
@@ -206,54 +217,44 @@ export default function DetailScreen({ navigation, route }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {isAppointment ? (
-          <>
-            {showDescription ? (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Beschreibung</Text>
-                <Text style={styles.cardText}>{normalized.description}</Text>
-              </View>
-            ) : (
-              <Text style={styles.mutedCenter}>Keine Beschreibung hinzugefügt.</Text>
-            )}
+<ScrollView contentContainerStyle={styles.scroll}>
+  {isAppointment && showDescription && normalized.description && (
+    <View style={[UI.bordered, styles.card]}>
+      <Text style={styles.cardTitle}>Beschreibung</Text>
+      <Text style={styles.cardText}>{normalized.description}</Text>
+    </View>
+  )}
 
-            {showImage ? (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Bild</Text>
+  {isAppointment && showImage && normalized.imageUri && (
+    <View style={[UI.bordered, styles.card]}>
+      <Text style={styles.cardTitle}>Bild</Text>
 
-                <Pressable
-                  onPress={() => setPreviewUri(normalized.imageUri)}
-                  style={styles.imagePressable}
-                >
-                  <Image source={{ uri: normalized.imageUri }} style={styles.image} resizeMode="cover" />
-                  <View style={styles.imageOverlay}>
-                    <Text style={styles.imageOverlayText}>Tippen zum Vergrößern</Text>
-                  </View>
-                </Pressable>
-              </View>
-            ) : (
-              <Text style={styles.mutedCenter}>Kein Bild hinzugefügt.</Text>
-            )}
+      <Pressable
+        onPress={() => setPreviewUri(normalized.imageUri)}
+        style={[UI.bordered, styles.imagePressable]}
+      >
+        <Image source={{ uri: normalized.imageUri }} style={styles.image} resizeMode="cover" />
+        <View style={styles.imageOverlay}>
+          <Text style={styles.imageOverlayText}>Tippen zum Vergrößern</Text>
+        </View>
+      </Pressable>
+    </View>
+  )}
 
-            {showAudio ? (
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Sprachmemo</Text>
+  {isAppointment && showAudio && (
+    <View style={[UI.bordered, styles.card]}>
+      <Text style={styles.cardTitle}>Sprachmemo</Text>
 
-                <Pressable onPress={togglePlay} style={styles.audioBtn}>
-                  <Text style={styles.audioBtnText}>{isPlaying ? "Stop" : "Play"}</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Text style={styles.mutedCenter}>Keine Sprachmemo hinzugefügt.</Text>
-            )}
-          </>
-        ) : (
-          <View />
-        )}
+      <Pressable onPress={togglePlay} style={[UI.primaryButton, styles.audioBtn]}>
+        <Text style={UI.primaryButtonText}>{isPlaying ? "Stop" : "Play"}</Text>
+      </Pressable>
+    </View>
+  )}
 
-        <View style={{ height: 120 }} />
-      </ScrollView>
+  <View style={{ height: 120 }} />
+</ScrollView>
+
+
 
       {/* Image preview */}
       <Modal
@@ -267,30 +268,21 @@ export default function DetailScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
-      <Pressable
-        onPress={() => {
-          stopPlayback();
-          navigation.goBack();
-        }}
-        style={styles.backBtn}
-      >
-        <Text style={styles.backText}>Zurück</Text>
-      </Pressable>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: TOP_OFFSET, paddingHorizontal: 20, backgroundColor: "white" },
-
-  smallHeader: { color: "grey", marginBottom: 6, textDecorationLine: "underline" },
+  smallHeader: { color: COLORS.textMuted, marginBottom: 6, textDecorationLine: "underline" },
 
   headerTitle: {
     fontSize: 26,
-    fontWeight: "250",
+    fontWeight: FONT_WEIGHT.normal,
     letterSpacing: 0.2,
     marginBottom: 12,
     textAlign: "left",
+    color: COLORS.text,
   },
 
   metaRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
@@ -303,32 +295,28 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#f2f2f2",
     borderWidth: 1,
-    borderColor: "#e5e5e5",
+    borderColor: COLORS.border,
   },
 
-  pillText: { fontSize: 14, fontWeight: "700", color: "#333" },
+  pillText: { fontSize: 14, fontWeight: FONT_WEIGHT.bold, color: COLORS.text },
 
   scroll: { paddingBottom: 40 },
 
   card: {
-    borderWidth: 1,
-    borderColor: "#eee",
     borderRadius: 16,
     padding: 14,
-    backgroundColor: "#fafafa",
+    backgroundColor: COLORS.surface,
     marginBottom: 12,
   },
 
-  cardTitle: { fontWeight: "900", marginBottom: 8 },
+  cardTitle: { fontWeight: FONT_WEIGHT.bold, marginBottom: 8, color: COLORS.text },
 
-  cardText: { fontSize: 15, lineHeight: 20, color: "#222" },
+  cardText: { fontSize: 15, lineHeight: 20, color: COLORS.text },
 
   imagePressable: {
-    borderWidth: 1,
-    borderColor: "#eee",
     borderRadius: 14,
     overflow: "hidden",
-    backgroundColor: "white",
+    backgroundColor: COLORS.surface,
   },
 
   image: { width: "100%", height: 240 },
@@ -343,22 +331,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.25)",
   },
 
-  imageOverlayText: { color: "white", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  imageOverlayText: { color: "white", fontSize: 12, fontWeight: FONT_WEIGHT.bold, textAlign: "center" },
 
-  // NEW:
   audioBtn: {
     marginTop: 6,
-    paddingVertical: 12,
     borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
   },
-  audioBtnText: { color: "white", fontWeight: "900" },
 
-  muted: { color: "grey", marginTop: 10 },
-  mutedCenter: { color: "grey", textAlign: "center", marginTop: 10, marginBottom: 10 },
+  muted: { color: COLORS.textMuted, marginTop: 10 },
+  mutedCenter: { color: COLORS.textMuted, textAlign: "center", marginTop: 10, marginBottom: 10 },
 
   previewBackdrop: {
     flex: 1,
@@ -372,7 +353,6 @@ const styles = StyleSheet.create({
   backBtn: {
     position: "absolute",
     left: 10,
-    bottom: BOTTOM_OFFSET,
     paddingHorizontal: 18,
     paddingVertical: 14,
     minWidth: 140,
@@ -380,5 +360,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  backText: { color: "grey", textDecorationLine: "underline" },
+  backText: { color: COLORS.textMuted, textDecorationLine: "underline" },
 });

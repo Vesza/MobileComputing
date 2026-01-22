@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../services/FirebaseConfig"; 
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "../services/FirebaseConfig";
 
 const AuthContext = createContext(null);
 
@@ -16,7 +16,14 @@ export function AuthProvider({ children }) {
     return unsub;
   }, []);
 
-  const value = useMemo(() => ({ user, authLoading }), [user, authLoading]);
+  const logout = async () => {
+    await signOut(auth);
+  };
+
+  const value = useMemo(
+    () => ({ user, authLoading, logout }),
+    [user, authLoading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,9 +1,18 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
-import { signOut } from "firebase/auth";
-import { auth, db } from "../services/FirebaseConfig";
-import { collection, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore";
-import { BOTTOM_OFFSET } from "../constants/layout";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  Timestamp,
+  limit,
+} from "firebase/firestore";
+import { db } from "../services/FirebaseConfig";
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
+import { useAuth } from "../context/AuthContext";
+import Toast from "../components/Toast";
 
 function startOfTodayDate() {
   const d = new Date();
@@ -40,13 +49,38 @@ function CalendarDateIcon({ date }) {
   );
 }
 
-export default function WelcomeScreen({ navigation }) {
-  const userEmail = auth.currentUser?.email ?? "";
+export default function WelcomeScreen({ navigation, route }) {
+  const { user } = useAuth();
 
   const [todayDate, setTodayDate] = useState(() => new Date());
   const todayLabel = useMemo(() => formatTodayHeader(todayDate), [todayDate]);
 
   const [todayItems, setTodayItems] = useState([]);
+
+  const [notifications, setNotifications] = useState([]);
+
+  // Toast state
+  const lastToastRef = useRef(null);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  useEffect(() => {
+    const msg = route?.params?.toast;
+    if (!msg) return;
+
+    if (lastToastRef.current === msg) return;
+    lastToastRef.current = msg;
+
+    setToastMsg(String(msg));
+    setToastVisible(true);
+
+    const t = setTimeout(() => {
+      setToastVisible(false);
+      setToastMsg("");
+    }, 1500);
+
+    return () => clearTimeout(t);
+  }, [route?.params?.toast]);
 
   useEffect(() => {
     const tick = setInterval(() => {
@@ -57,8 +91,10 @@ export default function WelcomeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!user?.uid) {
+      setTodayItems([]);
+      return;
+    }
 
     const from = Timestamp.fromDate(startOfTodayDate());
     const to = Timestamp.fromDate(endOfTodayDate());
@@ -74,15 +110,15 @@ export default function WelcomeScreen({ navigation }) {
       q,
       (snap) => {
         const list = snap.docs
-          .map((d) => {
-            const data = d.data();
+          .map((docSnap) => {
+            const data = docSnap.data();
             return {
-              id: d.id,
+              id: docSnap.id,
               title: data.title ?? "(ohne Titel)",
               startsAt: data.startsAt?.toDate ? data.startsAt.toDate() : null,
               description: typeof data.description === "string" ? data.description : null,
               imageUri: typeof data.imageUri === "string" ? data.imageUri : null,
-              audioUri: typeof data.audioUri === "string" ? data.audioUri : null, // NEW
+              audioUri: typeof data.audioUri === "string" ? data.audioUri : null,
             };
           })
           .filter((x) => x.startsAt);
@@ -93,15 +129,38 @@ export default function WelcomeScreen({ navigation }) {
     );
 
     return unsub;
-  }, []);
+  }, [user?.uid]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (e) {
-      console.log("Logout-Fehler:", e);
+  useEffect(() => {
+    if (!user?.uid) {
+      setNotifications([]);
+      return;
     }
-  };
+
+    const q = query(
+      collection(db, "users", user.uid, "notifications"),
+      orderBy("fireAt", "asc"),
+      limit(5)
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            text: data.text ?? "",
+            fireAt: data.fireAt?.toDate ? data.fireAt.toDate() : null,
+          };
+        });
+        setNotifications(list);
+      },
+      (err) => console.log("Welcome notifications snapshot error:", err)
+    );
+
+    return unsub;
+  }, [user?.uid]);
 
   const openDetail = (it) => {
     navigation.navigate("Detail", {
@@ -112,25 +171,39 @@ export default function WelcomeScreen({ navigation }) {
         startsAt: it.startsAt ? it.startsAt.toISOString() : null,
         description: it.description ?? null,
         imageUri: it.imageUri ?? null,
-        audioUri: it.audioUri ?? null, // NEW
+        audioUri: it.audioUri ?? null,
       },
     });
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.loggedInText}>Eingeloggt mit: {userEmail || "-"}</Text>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
+      <View style={styles.quoteBlock}>
+        <Text style={styles.quoteText} allowFontScaling={false}>
+          Alles hat seine Zeit
+        </Text>
+      </View>
 
       <View style={styles.centerBlock}>
-        <Text style={styles.dayTitle}>{todayLabel}</Text>
+        <Text style={styles.dayTitle}>Was ist heute wichtig?</Text>
 
         {todayItems.length > 0 ? (
-          <View style={styles.todayCard}>
-            <Text style={styles.sectionHeadline}>Heutige Termine</Text>
-
+          <View style={[UI.bordered, styles.todayCard, styles.todayCardMin]}>
             <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ paddingBottom: 6 }}>
               {todayItems.map((it) => (
-                <Pressable key={it.id} onPress={() => openDetail(it)} style={styles.todayRow}>
+                <Pressable
+                  key={it.id}
+                  onPress={() => openDetail(it)}
+                  style={[UI.bordered, styles.todayRow]}
+                >
                   <Text style={styles.todayRowTime}>{formatTime(it.startsAt)}</Text>
                   <View style={styles.todayRowDivider} />
                   <Text style={styles.todayRowTitle} numberOfLines={2}>
@@ -139,130 +212,145 @@ export default function WelcomeScreen({ navigation }) {
                 </Pressable>
               ))}
             </ScrollView>
-
-            <Text style={styles.todayHint}>Tippen auf Termin für Details</Text>
           </View>
         ) : (
-          <View style={styles.emptyTodayBox}>
+          <View style={[UI.bordered, styles.emptyTodayBox]}>
             <Text style={styles.sectionHeadline}>Termine</Text>
-            <Text style={styles.emptyText}>Für den heutigen Tag wurde noch kein Termin zugeordnet.</Text>
+            <Text style={styles.emptyText}>
+              Für den heutigen Tag wurde noch kein Termin zugeordnet.
+            </Text>
           </View>
         )}
+
+        //notification card
+        <View style={[UI.bordered, styles.smallCard]}>
+          <View style={styles.cardHeaderRow}>
+            <Pressable onPress={() => navigation.navigate("Notifications")}>
+              <Text style={styles.cardTitle}>Notifications</Text>
+            </Pressable>
+          </View>
+
+            {notifications.length > 0 &&
+            notifications.map((n) => (
+          <View key={n.id} style={[UI.bordered, styles.smallRow]}>
+            <Text style={styles.smallRowTitle} numberOfLines={1}>
+            {n.text}
+            </Text>
+        </View>
+  ))
+}
+
+        </View>
       </View>
 
-      {/* 4 Buttons */}
-      <View style={styles.bottomRow}>
-        <Pressable style={styles.squareBtn} onPress={() => navigation.navigate("Calendar")}>
+      //bottom buttons
+      <View style={[styles.bottomRow, { bottom: LAYOUT.offsets.bottom + -40}]}>
+        <Pressable
+          style={[UI.bordered, styles.squareBtn]}
+          onPress={() => navigation.navigate("Calendar")}
+        >
           <CalendarDateIcon date={todayDate} />
         </Pressable>
 
-        <Pressable style={styles.squareBtn} onPress={() => navigation.navigate("Reminders")}>
-          <Text style={styles.squareTextIcon}>⏰</Text>
-        </Pressable>
-
-        <Pressable style={styles.squareBtn} onPress={() => navigation.navigate("Notifications")}>
-          <Text style={styles.squareTextIcon}>❗</Text>
-        </Pressable>
-
-        <Pressable style={styles.squareBtn} onPress={() => navigation.navigate("QuickActions")}>
+        <Pressable
+          style={[UI.bordered, styles.squareBtn]}
+          onPress={() => navigation.navigate("QuickActions")}
+        >
           <Text style={styles.squareTextIcon}>＋</Text>
         </Pressable>
       </View>
 
-      <Pressable onPress={handleLogout} style={styles.bottomLeftPressable}>
-        <Text style={styles.bottomLinkText}>Logout</Text>
-      </Pressable>
+      <Toast visible={toastVisible} message={toastMsg} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, paddingHorizontal: 20 },
 
   loggedInText: {
-    position: "absolute",
-    left: 20,
-    top: 50,
-    color: "grey",
+    color: COLORS.textMuted,
     textDecorationLine: "underline",
+    marginBottom: 10,
   },
 
-  centerBlock: { flex: 1, justifyContent: "center", paddingHorizontal: 20 },
+  centerBlock: {
+    flex: 1,
+    justifyContent: "flex-start",
+    marginTop: 48, // tweak: 0–24
+  },
 
   dayTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 14,
+    fontSize: FONT_SIZE.title,
+    //fontWeight: FONT_WEIGHT.bold,
+    textAlign: "left",
+    marginBottom: 11,
+    color: COLORS.text,
+    fontFamily: "BuenardReg",
+    letterSpacing: -0.1,
   },
 
   todayCard: {
-    borderWidth: 1,
-    borderColor: "#ddd",
     borderRadius: 14,
     padding: 14,
-    backgroundColor: "#fafafa",
+    backgroundColor: COLORS.surface,
   },
 
   sectionHeadline: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: FONT_SIZE.heading,
+    fontWeight: FONT_WEIGHT.bold,
     marginBottom: 10,
     textAlign: "center",
+    color: COLORS.text,
   },
 
   todayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e3e3e3",
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 8,
-    backgroundColor: "white",
+    backgroundColor: COLORS.surface,
+    flexDirection: "row",
+    alignItems: "center",
   },
 
-  todayRowTime: { width: 56, color: "grey", fontWeight: "800" },
+  todayRowTime: { width: 42, color: COLORS.textMuted, fontWeight: FONT_WEIGHT.bold },
 
-  todayRowDivider: { width: 1, height: 22, backgroundColor: "#ddd", marginHorizontal: 10 },
+  todayRowDivider: { width: 1, height: 20, backgroundColor: COLORS.border, marginHorizontal: 10 },
 
-  todayRowTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: "#222" },
+  todayRowTitle: { flex: 1, fontSize: 15, fontWeight: FONT_WEIGHT.bold, color: COLORS.text },
 
   todayHint: {
     marginTop: 8,
-    color: "grey",
+    color: COLORS.textMuted,
     textDecorationLine: "underline",
     textAlign: "center",
   },
 
   emptyTodayBox: {
-    borderWidth: 1,
-    borderColor: "#eee",
     borderRadius: 14,
     padding: 14,
-    backgroundColor: "white",
+    backgroundColor: COLORS.surface,
   },
 
-  emptyText: { color: "grey", textAlign: "center" },
+  emptyText: { color: COLORS.textMuted, textAlign: "center" },
 
-  bottomRow: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: BOTTOM_OFFSET + 90,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+bottomRow: {
+  position: "absolute",
+  left: 16,
+  right: 16,
+  flexDirection: "row",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 8,
+},
+
 
   squareBtn: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: "#f2f2f2",
-    borderWidth: 1,
-    borderColor: "#ddd",
+    backgroundColor: "COLORS.surface",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -273,22 +361,21 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 6,
-    backgroundColor: "white",
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: COLORS.border,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },
 
-  calTopBar: { position: "absolute", top: 0, left: 0, right: 0, height: 7, backgroundColor: "#007AFF" },
+  calTopBar: { position: "absolute", top: 0, left: 0, right: 0, height: 7, backgroundColor: COLORS.primary },
 
-  calDay: { marginTop: 4, fontSize: 14, fontWeight: "900", color: "#333" },
+  calDay: { marginTop: 4, fontSize: 14, fontWeight: FONT_WEIGHT.bold, color: COLORS.text },
 
   bottomLeftPressable: {
     position: "absolute",
     left: 10,
-    bottom: BOTTOM_OFFSET,
     paddingHorizontal: 18,
     paddingVertical: 14,
     minWidth: 140,
@@ -296,5 +383,65 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  bottomLinkText: { color: "grey", textDecorationLine: "underline" },
+  todayCardMin: {
+    minHeight: 260,
+  },
+
+  quoteBlock: {
+    width: "100%",
+    alignSelf: "stretch",
+    //marginTop: 4,
+    marginBottom: 36,
+    //paddingHorizontal: 32,
+  },
+
+  quoteText: {
+    textAlign: "center",
+    fontSize: 54,
+    lineHeight: 60,
+    fontWeight: FONT_WEIGHT.normal, // or medium if you have it
+    color: COLORS.text,
+    fontFamily: "Awesome",
+    letterSpacing: 0.3,
+    includeFontPadding: true,
+  },
+
+  smallCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: COLORS.surface,
+  },
+
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+
+  cardTitle: {
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+    textDecorationLine: "underline",
+  },
+
+  cardEmpty: {
+    color: COLORS.textMuted,
+    textAlign: "center",
+    paddingVertical: 10,
+  },
+
+  smallRow: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 8,
+  },
+
+  smallRowTitle: {
+    color: COLORS.text,
+    fontWeight: FONT_WEIGHT.bold,
+  },
 });

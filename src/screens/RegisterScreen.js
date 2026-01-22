@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState("");
@@ -80,33 +81,45 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        UI.screen,
+        styles.container,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
       <View style={styles.box}>
         <Text style={styles.heading}>Registrieren</Text>
 
         <TextInput
           placeholder="E-Mail"
+          placeholderTextColor={COLORS.textMuted}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
-          style={styles.input}
+          style={[UI.bordered, styles.input]}
         />
 
         <TextInput
           placeholder="Passwort"
+          placeholderTextColor={COLORS.textMuted}
           secureTextEntry
           value={pw}
           onChangeText={setPw}
-          style={styles.input}
+          style={[UI.bordered, styles.input]}
         />
 
         <TextInput
           placeholder="Passwort wiederholen"
+          placeholderTextColor={COLORS.textMuted}
           secureTextEntry
           value={pw2}
           onChangeText={setPw2}
-          style={styles.input}
+          style={[UI.bordered, styles.input]}
         />
 
         <Button title="Weiter" onPress={handleRegister} />
@@ -121,25 +134,25 @@ export default function RegisterScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     justifyContent: "center",
-    padding: 20,
+    paddingHorizontal: 20,
   },
   box: {},
   heading: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
     marginBottom: 12,
+    color: COLORS.text,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 8,
+    padding: 10,
     marginBottom: 10,
-    borderRadius: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
   },
   status: {
     marginTop: 10,
-    color: "grey",
+    color: COLORS.textMuted,
   },
 });

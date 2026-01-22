@@ -5,16 +5,9 @@ export default function QuickActionsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <Text style={styles.title}>Aktionen</Text>
 
         <Pressable style={styles.btn} onPress={() => navigation.navigate("CreateTitle", { kind: "appointment" })}>
           <Text style={styles.btnText}>Termin hinzufügen</Text>
-        </Pressable>
-
-        <View style={{ height: 12 }} />
-
-        <Pressable style={styles.btn} onPress={() => navigation.navigate("CreateTitle", { kind: "reminder" })}>
-          <Text style={styles.btnText}>Reminder</Text>
         </Pressable>
 
         <View style={{ height: 12 }} />
@@ -25,9 +18,6 @@ export default function QuickActionsScreen({ navigation }) {
 
         <View style={{ height: 18 }} />
 
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={styles.link}>Schließen</Text>
-        </Pressable>
       </View>
     </View>
   );

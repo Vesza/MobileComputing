@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList, Platform } from "react-native";
-import { auth, db } from "../services/FirebaseConfig";
+import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { collection, onSnapshot, orderBy, query, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../services/FirebaseConfig";
 import { cancelScheduledAsync } from "../services/notify";
 import ConfirmModal from "../components/ConfirmModal";
-
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
+import { useAuth } from "../context/AuthContext";
 
 function formatDateTime(d) {
   return d.toLocaleString("de-DE", {
@@ -19,14 +19,18 @@ function formatDateTime(d) {
 }
 
 export default function NotificationsScreen({ navigation }) {
+  const { user } = useAuth();
+
   const [items, setItems] = useState([]);
 
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, scheduledId } | null
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!user?.uid) {
+      setItems([]);
+      return;
+    }
 
     const q = query(
       collection(db, "users", user.uid, "notifications"),
@@ -52,7 +56,7 @@ export default function NotificationsScreen({ navigation }) {
     );
 
     return unsub;
-  }, []);
+  }, [user?.uid]);
 
   const empty = useMemo(() => items.length === 0, [items]);
 
@@ -67,8 +71,7 @@ export default function NotificationsScreen({ navigation }) {
 
   const confirmDelete = useCallback(async () => {
     try {
-      const user = auth.currentUser;
-      if (!user || !deleteTarget) return;
+      if (!user?.uid || !deleteTarget) return;
 
       setDeleting(true);
 
@@ -83,7 +86,7 @@ export default function NotificationsScreen({ navigation }) {
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget]);
+  }, [user?.uid, deleteTarget]);
 
   const openDetail = useCallback(
     (it) => {
@@ -100,7 +103,15 @@ export default function NotificationsScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        UI.screen,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
       <Text style={styles.title}>Notifications</Text>
 
       {empty ? (
@@ -109,9 +120,9 @@ export default function NotificationsScreen({ navigation }) {
         <FlatList
           data={items}
           keyExtractor={(x) => x.id}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 120 + LAYOUT.offsets.bottom }}
           renderItem={({ item }) => (
-            <Pressable style={styles.row} onPress={() => openDetail(item)}>
+            <Pressable style={[UI.bordered, styles.row]} onPress={() => openDetail(item)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle} numberOfLines={3}>
                   ❗ {item.text}
@@ -145,30 +156,30 @@ export default function NotificationsScreen({ navigation }) {
         onConfirm={confirmDelete}
       />
 
-      <Pressable onPress={() => navigation.goBack()} style={styles.back}>
-        <Text style={styles.link}>Zurück</Text>
-      </Pressable>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 12 },
-  empty: { color: "grey", marginTop: 30, textAlign: "center" },
+  title: {
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.bold,
+    marginBottom: 12,
+    color: COLORS.text,
+  },
+  empty: { color: COLORS.textMuted, marginTop: 30, textAlign: "center" },
 
   row: {
-    borderWidth: 1,
-    borderColor: "#ddd",
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: "white",
+    backgroundColor: COLORS.surface,
     flexDirection: "row",
     alignItems: "center",
   },
-  rowTitle: { fontWeight: "800", marginBottom: 6 },
-  rowSub: { color: "grey" },
+  rowTitle: { fontWeight: FONT_WEIGHT.bold, marginBottom: 6, color: COLORS.text },
+  rowSub: { color: COLORS.textMuted },
 
   trashPressable: { marginLeft: 10, paddingHorizontal: 6, paddingVertical: 6 },
   trash: { fontSize: 18 },
@@ -176,12 +187,11 @@ const styles = StyleSheet.create({
   back: {
     position: "absolute",
     left: 10,
-    bottom: BOTTOM_OFFSET,
     paddingHorizontal: 18,
     paddingVertical: 14,
     minWidth: 140,
     minHeight: 56,
     justifyContent: "center",
   },
-  link: { color: "grey", textDecorationLine: "underline" },
+  link: { color: COLORS.textMuted, textDecorationLine: "underline" },
 });

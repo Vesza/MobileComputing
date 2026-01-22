@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import BottomLinks from "../components/BottomLinks";
 import { formatDDMMYYYY } from "../utils/datetime";
+import { UI, LAYOUT, COLORS, FONT_SIZE } from "../constants";
 
 export default function CreateDateScreen({ navigation, route }) {
   const [showPicker, setShowPicker] = useState(false);
@@ -14,7 +14,7 @@ export default function CreateDateScreen({ navigation, route }) {
     setValue(draft.date ?? "");
   }, [draft.date]);
 
-  const handleChange = (event, selectedDate) => {
+  const handleChange = (_event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
 
@@ -31,11 +31,19 @@ export default function CreateDateScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.center}>
-        <Text style={styles.heading}>Datum auswählen</Text>
+    <View
+      style={[
+        UI.screen,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
+      <View style={UI.center}>
+        <Text style={UI.heading}>Datum auswählen</Text>
 
-        <Pressable style={styles.pickBox} onPress={() => setShowPicker(true)}>
+        <Pressable style={[UI.bordered, styles.pickBox]} onPress={() => setShowPicker(true)}>
           <Text style={styles.pickText}>{value || "Hier tippen, um Datum zu wählen"}</Text>
         </Pressable>
 
@@ -43,7 +51,7 @@ export default function CreateDateScreen({ navigation, route }) {
           <DateTimePicker
             value={new Date()}
             mode="date"
-            display={Platform.OS === "ios" ? "inline" : "default"}
+            display={LAYOUT.datePickerDisplay}
             onChange={handleChange}
           />
         )}
@@ -55,34 +63,26 @@ export default function CreateDateScreen({ navigation, route }) {
 
         <View style={{ height: 12 }} />
 
-        <Pressable onPress={canContinue ? goNext : null} style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}>
-          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>Weiter</Text>
+        <Pressable
+          onPress={canContinue ? goNext : null}
+          style={[UI.primaryButton, !canContinue && UI.primaryButtonDisabled]}
+        >
+          <Text style={[UI.primaryButtonText, !canContinue && UI.primaryButtonTextDisabled]}>
+            Uhrzeit angeben
+          </Text>
         </Pressable>
       </View>
 
-      <BottomLinks
-        onLeftPress={() => navigation.goBack()}
-        onRightPress={() => navigation.navigate("Welcome")}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
-  heading: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
   pickBox: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
     padding: 14,
     alignItems: "center",
     marginBottom: 12,
+    backgroundColor: COLORS.surface,
   },
-  pickText: { color: "grey", fontSize: 16 },
-  nextBtn: { backgroundColor: "#007AFF", paddingVertical: 12, borderRadius: 8, alignItems: "center" },
-  nextBtnDisabled: { backgroundColor: "#ccc" },
-  nextBtnText: { color: "white", fontWeight: "bold" },
-  nextBtnTextDisabled: { color: "#888" },
+  pickText: { color: COLORS.textMuted, fontSize: FONT_SIZE.body },
 });
