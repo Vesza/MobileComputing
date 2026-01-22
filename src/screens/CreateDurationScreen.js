@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
 
   input: {
     padding: 12,
-    borderRadius: 8, // keep consistent with UI.bordered
+    borderRadius: 8,
     textAlign: "center",
     fontSize: FONT_SIZE.heading,
     color: COLORS.text,

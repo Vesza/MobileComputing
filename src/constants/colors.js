@@ -1,9 +1,9 @@
 export const COLORS = {
-  primary: "#fcfcfc",      // your brand red (use it here)
+  primary:"#fcf8f8",     
   primaryText: "#FFFFFF",
 
-  background: "#C1E1C1",   // neutral app background
-  surface: "#FAC898",      // cards/inputs/sheets should stay clean
+  background: "#C1E1C1",  
+  surface: "#FAC898",      
 
   border: "#ffffff",
   disabled: "#CCCCCC",

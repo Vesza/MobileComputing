@@ -10,7 +10,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
   const [showResend, setShowResend] = useState(false);
-  const [pendingVerifyUser, setPendingVerifyUser] = useState(null); // ✅ holds user needing verification
+  const [pendingVerifyUser, setPendingVerifyUser] = useState(null);
   const statusTimerRef = useRef(null);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function LoginScreen({ navigation }) {
       const user = cred.user;
 
       if (!user.emailVerified) {
-        setPendingVerifyUser(user); // ✅ store for resend
+        setPendingVerifyUser(user); //  store user
         showTemporaryStatus("E-Mail muss noch bestätigt werden.");
         setShowResend(true);
         return;
@@ -64,7 +64,7 @@ export default function LoginScreen({ navigation }) {
       setStatus("");
       setShowResend(false);
       setPendingVerifyUser(null);
-      // RootNavigator will switch to AppStack automatically.
+      // RootNavigator switches to AppStack automatically.
     } catch (e) {
       console.log("Login-Fehler:", e);
 

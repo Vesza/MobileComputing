@@ -23,7 +23,7 @@ export default function NotificationsScreen({ navigation }) {
 
   const [items, setItems] = useState([]);
 
-  const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, scheduledId } | null
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, scheduledId } 
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {

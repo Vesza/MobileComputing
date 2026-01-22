@@ -16,7 +16,6 @@ export default function ConfirmModal({
   return (
     <Modal visible={!!visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
-        {/* stop propagation */}
         <Pressable style={styles.box} onPress={() => {}}>
           <Text style={styles.title}>{title || "Bestätigen?"}</Text>
 

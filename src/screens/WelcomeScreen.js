@@ -277,12 +277,11 @@ const styles = StyleSheet.create({
   centerBlock: {
     flex: 1,
     justifyContent: "flex-start",
-    marginTop: 48, // tweak: 0–24
+    marginTop: 48,
   },
 
   dayTitle: {
     fontSize: FONT_SIZE.title,
-    //fontWeight: FONT_WEIGHT.bold,
     textAlign: "left",
     marginBottom: 11,
     color: COLORS.text,

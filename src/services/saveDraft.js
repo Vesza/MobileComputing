@@ -54,7 +54,7 @@ export async function saveDraft({ draft, uid }) {
     const when = toDateFromStrings(date, time);
     const now = new Date();
 
-    // keep your existing constraint for reminder/notification
+
     if (
       (kind === "reminder" || kind === "notification") &&
       when.getTime() <= now.getTime() + 10_000
@@ -76,7 +76,7 @@ export async function saveDraft({ draft, uid }) {
         audioUri,
       });
 
-      return { ok: true, kind, toast: "Termin gespeichert ✅", docId: ref.id };
+      return { ok: true, kind, toast: "Termin gespeichert", docId: ref.id };
     }
 
     if (kind === "reminder") {
@@ -94,7 +94,7 @@ export async function saveDraft({ draft, uid }) {
         createdAt: serverTimestamp(),
       });
 
-      return { ok: true, kind, toast: "Reminder gespeichert ✅", docId: ref.id };
+      return { ok: true, kind, toast: "Reminder gespeichert", docId: ref.id };
     }
 
     // notification
@@ -112,7 +112,7 @@ export async function saveDraft({ draft, uid }) {
       createdAt: serverTimestamp(),
     });
 
-    return { ok: true, kind, toast: "Notification gespeichert ✅", docId: ref.id };
+    return { ok: true, kind, toast: "Notification gespeichert", docId: ref.id };
   } catch (e) {
     console.log("saveDraft error:", e);
 

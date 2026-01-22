@@ -31,31 +31,31 @@ export default function CreateTitleScreen({ navigation, route }) {
 
   const [title, setTitle] = useState("");
 
-  // appointment-only extras
+ 
   const [imageUri, setImageUri] = useState(null);
   const [description, setDescription] = useState("");
   const [descOpen, setDescOpen] = useState(false);
   const [descDraft, setDescDraft] = useState("");
 
-  // audio memo (appointment-only)
+  // audio memo 
   const [audioUri, setAudioUri] = useState(null);
   const [memoOpen, setMemoOpen] = useState(false);
 
-  // NEW: details sheet
+
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const canContinue = title.trim().length > 0;
 
-  // playback + recording refs (avoid stale closure bugs)
+  // playback + recording refs 
   const soundRef = useRef(null);
   const recordingRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
-  // --------------------
+
   // Cleanup on unmount
-  // --------------------
+
   useEffect(() => {
     return () => {
       (async () => {
@@ -77,9 +77,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     };
   }, []);
 
-  // --------------------
+ 
   // Image handling
-  // --------------------
+
   const pickFromGallery = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -146,9 +146,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     ]);
   }, [pickFromGallery, takePhoto]);
 
-  // --------------------
+ 
   // Audio memo handling
-  // --------------------
+
   const stopPlayback = useCallback(async () => {
     try {
       if (!soundRef.current) {
@@ -261,9 +261,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     setAudioUri(null);
   }, [stopPlayback]);
 
-  // --------------------
-  // Description modal helpers
-  // --------------------
+
+  // description modal helpers
+
   const openDescription = useCallback(() => {
     setDescDraft(description || "");
     setDescOpen(true);
@@ -274,9 +274,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     setDescOpen(false);
   }, [descDraft]);
 
-  // --------------------
-  // Details sheet helpers
-  // --------------------
+
+  // details sheet helpers
+
   const openDetailsSheet = useCallback(() => {
     if (!isAppointment) return;
     setDetailsOpen(true);
@@ -299,9 +299,7 @@ export default function CreateTitleScreen({ navigation, route }) {
     setMemoOpen(true);
   }, []);
 
-  // --------------------
-  // Continue
-  // --------------------
+
   const goNext = useCallback(() => {
     if (!canContinue) return;
 
@@ -321,9 +319,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     });
   }, [canContinue, navigation, kind, title, isAppointment, imageUri, description, audioUri]);
 
-  // --------------------
-  // UI flags
-  // --------------------
+
+
+
   const showExtrasSummary = isAppointment && (imageUri || description?.trim() || audioUri);
 
   return (
@@ -356,7 +354,7 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Text>
       </Pressable>
 
-      {/* Single + button (Appointment only) */}
+
       {isAppointment ? (
         <View style={styles.detailsRow}>
           <Pressable
@@ -367,7 +365,7 @@ export default function CreateTitleScreen({ navigation, route }) {
             <Text style={styles.squareTextIcon}>＋</Text>
           </Pressable>
 
-          {/* Optional: small summary (no "Keine ..." spam) */}
+
           {showExtrasSummary ? (
             <View style={[UI.bordered, styles.summaryCard]}>
               {description?.trim() ? <Text style={styles.summaryLine}>✓ Beschreibung</Text> : null}
@@ -443,7 +441,7 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
-      {/* -------------------- Memo Modal -------------------- */}
+
       <Modal
         visible={memoOpen}
         transparent

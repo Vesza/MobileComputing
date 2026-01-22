@@ -49,12 +49,10 @@ export default function CalendarScreen({ navigation }) {
   const [items, setItems] = useState([]);
 
   // Delete modal state
-  const [deleteTarget, setDeleteTarget] = useState(null); // { id, title } | null
+  const [deleteTarget, setDeleteTarget] = useState(null); 
   const [deleting, setDeleting] = useState(false);
 
-  // --------------------
-  // Firestore subscription (USER-DEPENDENT)
-  // --------------------
+
   useEffect(() => {
     if (!user?.uid) {
       setItems([]);
@@ -97,9 +95,9 @@ export default function CalendarScreen({ navigation }) {
     return unsub;
   }, [user?.uid]);
 
-  // --------------------
+
   // SectionList grouping
-  // --------------------
+ 
   const sections = useMemo(() => {
     const map = new Map();
 
@@ -122,9 +120,9 @@ export default function CalendarScreen({ navigation }) {
     }));
   }, [items]);
 
-  // --------------------
+
   // delete handling
-  // --------------------
+
   const openDeletePopup = useCallback((it) => {
     setDeleteTarget({ id: it.id, title: it.title });
   }, []);
@@ -150,9 +148,9 @@ export default function CalendarScreen({ navigation }) {
     }
   }, [user?.uid, deleteTarget]);
 
-  // --------------------
+
   // Navigation
-  // --------------------
+
   const openDetail = useCallback(
     (item) => {
       navigation.navigate("Detail", {
@@ -170,9 +168,9 @@ export default function CalendarScreen({ navigation }) {
     [navigation]
   );
 
-  // --------------------
+
   // Render
-  // --------------------
+
   return (
     <View
       style={[
@@ -189,7 +187,7 @@ export default function CalendarScreen({ navigation }) {
         )}
         renderItem={({ item }) => (
           <View style={[UI.bordered, styles.row]}>
-            {/* Main tap area opens detail */}
+       
             <Pressable
               style={styles.rowMain}
               onPress={() => openDetail(item)}
@@ -202,7 +200,7 @@ export default function CalendarScreen({ navigation }) {
               </Text>
             </Pressable>
 
-            {/* Overflow button (discoverable delete) */}
+      
             <Pressable
               style={styles.moreBtn}
               onPress={() => openDeletePopup(item)}
@@ -219,7 +217,7 @@ export default function CalendarScreen({ navigation }) {
         }
       />
 
-      {/* DELETE CONFIRM MODAL */}
+
       <Modal
         visible={!!deleteTarget}
         transparent

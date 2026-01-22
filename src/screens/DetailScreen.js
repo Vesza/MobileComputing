@@ -14,18 +14,18 @@ import { UI, LAYOUT, COLORS, FONT_WEIGHT, FONT_SIZE } from "../constants";
 function parseDateAny(x) {
   if (!x) return null;
 
-  // Firestore Timestamp-like
+  // firestore timestamp
   if (typeof x === "object" && typeof x.toDate === "function") {
     const d = x.toDate();
     return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
   }
 
-  // JS Date
+
   if (x instanceof Date) {
     return !Number.isNaN(x.getTime()) ? x : null;
   }
 
-  // ISO string
+ 
   if (typeof x === "string") {
     const d = new Date(x);
     return !Number.isNaN(d.getTime()) ? d : null;
@@ -51,7 +51,7 @@ function safeText(x, fallback = "-") {
 }
 
 export default function DetailScreen({ navigation, route }) {
-  const type = route?.params?.type; // "appointment" | "reminder" | "notification"
+  const type = route?.params?.type; // appointment, notification
   const item = route?.params?.item;
 
   const [previewUri, setPreviewUri] = useState(null);
@@ -256,7 +256,7 @@ export default function DetailScreen({ navigation, route }) {
 
 
 
-      {/* Image preview */}
+
       <Modal
         visible={!!previewUri}
         transparent
