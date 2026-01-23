@@ -263,6 +263,13 @@ export default function WelcomeScreen({ navigation, route }) {
       </View>
 
       <Toast visible={toastVisible} message={toastMsg} />
+      <Pressable
+        style={styles.footer}
+        onPress={() => navigation.navigate("Impressum")}
+      >
+        <Text style={styles.footerText}>Impressum</Text>
+      </Pressable>
+
     </View>
   );
 }
@@ -400,7 +407,7 @@ bottomRow: {
     textAlign: "center",
     fontSize: 54,
     lineHeight: 60,
-    fontWeight: FONT_WEIGHT.normal, // or medium if you have it
+    fontWeight: FONT_WEIGHT.normal,
     color: COLORS.text,
     fontFamily: "Awesome",
     letterSpacing: 0.3,
@@ -445,4 +452,18 @@ bottomRow: {
     color: COLORS.text,
     fontWeight: FONT_WEIGHT.bold,
   },
+
+  footer: {
+  width: "100%",
+  alignItems: "center",
+  borderTopWidth: 1,
+  borderTopColor: COLORS.border,
+},
+
+footerText: {
+  fontSize: 12,
+  color: COLORS.textMuted,
+  textDecorationLine: "underline",
+},
+
 });

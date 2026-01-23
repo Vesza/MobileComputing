@@ -14,6 +14,8 @@ import QuickActionsScreen from "../screens/QuickActionsScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
 import { COLORS } from "../constants";
 import HeaderLogoutButton from "../components/HeaderLogoutButton";
+import ImpressumScreen from "../screens/ImpressumScreen";
+
 
 
 
@@ -46,6 +48,8 @@ export default function AppStack() {
       <Stack.Screen name="CreateTitle" component={CreateTitleScreen} />
       <Stack.Screen name="CreateDate" component={CreateDateScreen} />
       <Stack.Screen name="CreateTime" component={CreateTimeScreen} />
+      <Stack.Screen name="Impressum" component={ImpressumScreen} options={{title: "Impressum",headerRight: () => null, headerShown: false}}/>
+
 
   
       <Stack.Screen

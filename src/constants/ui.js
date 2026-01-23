@@ -34,16 +34,18 @@ export const UI = {
 
   // Buttons
   primaryButton: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.surface,
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
+    borderWidth: 2,                
+    borderColor: COLORS.border,
   },
   primaryButtonDisabled: {
     backgroundColor: COLORS.disabled,
   },
   primaryButtonText: {
-    color: COLORS.primaryText,
+    color: COLORS.textMuted,
     fontWeight: FONT_WEIGHT.bold,
   },
   primaryButtonTextDisabled: {
@@ -52,7 +54,7 @@ export const UI = {
 
   // Borders
   bordered: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.border,
     borderRadius: 8,
   },

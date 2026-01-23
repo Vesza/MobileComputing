@@ -357,24 +357,26 @@ export default function CreateTitleScreen({ navigation, route }) {
 
       {isAppointment ? (
         <View style={styles.detailsRow}>
-          <Pressable
-            onPress={openDetailsSheet}
-            style={[UI.bordered, styles.squareBtn]}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={styles.squareTextIcon}>＋</Text>
-          </Pressable>
-
-
-          {showExtrasSummary ? (
+          <View style={styles.detailsCenter}>
+           {showExtrasSummary ? (
             <View style={[UI.bordered, styles.summaryCard]}>
               {description?.trim() ? <Text style={styles.summaryLine}>✓ Beschreibung</Text> : null}
               {imageUri ? <Text style={styles.summaryLine}>✓ Bild</Text> : null}
               {audioUri ? <Text style={styles.summaryLine}>✓ Sprachmemo</Text> : null}
             </View>
-          ) : null}
+            ) : null}
         </View>
-      ) : null}
+
+    <Pressable
+      onPress={openDetailsSheet}
+      style={[UI.bordered, styles.squareBtn]}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Text style={styles.squareTextIcon}>＋</Text>
+    </Pressable>
+  </View>
+) : null}
+
 
       {/* -------------------- Details Bottom Sheet -------------------- */}
       <Modal
@@ -502,7 +504,7 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
-      {/* Optional inline image preview under everything (kept minimal) */}
+      {/* Optional inline image preview under everything*/}
       {isAppointment && imageUri ? (
         <View style={[UI.bordered, styles.previewCard]}>
           <Image source={{ uri: imageUri }} style={styles.previewImage} />
@@ -525,7 +527,7 @@ const styles = StyleSheet.create({
   headline: {
     textAlign: "center",
     fontSize: FONT_SIZE.title,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.normal,
     color: COLORS.text,
     marginBottom: 14,
   },
@@ -538,11 +540,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  detailsRow: {
-    marginTop: 18,
-    alignItems: "center",
-    gap: 10,
-  },
+detailsRow: {
+  width: "100%",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 12,
+},
+
+
+detailsCenter: {
+  flex: 1,
+  alignItems: "center",
+},
+
 
   squareBtn: {
     width: 56,
@@ -560,23 +571,23 @@ const styles = StyleSheet.create({
 
   summaryCard: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 4,
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     minWidth: 160,
+    //alignItems: "center",
   },
 
   summaryLine: {
     color: COLORS.textMuted,
     fontSize: FONT_SIZE.body,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.normal,
     textAlign: "center",
   },
 
   // Sheet
   sheetBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.25)",
     justifyContent: "flex-end",
     padding: 14,
   },
@@ -612,7 +623,7 @@ const styles = StyleSheet.create({
   sheetCancel: {
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#f2f2f2",
+    backgroundColor: COLORS.disabled,
     alignItems: "center",
   },
 
@@ -667,6 +678,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+
   },
 
   modalBtnText: {
@@ -678,10 +690,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+    backgroundColor: COLORS.surface,
+   
   },
 
   btnDisabled: {
     opacity: 0.5,
+    backgroundColor: COLORS.disabled,
   },
 
   // Image preview
@@ -701,7 +716,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 10,
     top: 10,
-    backgroundColor: "rgba(255,255,255,0.85)",
+    backgroundColor: "rgba(250, 248, 248, 0.85)",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,

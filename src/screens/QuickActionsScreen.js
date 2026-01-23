@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function QuickActionsScreen({ navigation }) {
   return (
@@ -24,17 +25,32 @@ export default function QuickActionsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
-  title: { fontSize: 22, fontWeight: "800", textAlign: "center", marginBottom: 16 },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: COLORS.background,
+  },
+
+  center: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
   btn: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#f2f2f2",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
-  btnText: { fontWeight: "800" },
-  link: { color: "grey", textDecorationLine: "underline", textAlign: "center" },
+
+  btnText: {
+
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textMuted,
+  },
+
+
 });
+
