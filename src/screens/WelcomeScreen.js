@@ -222,25 +222,27 @@ export default function WelcomeScreen({ navigation, route }) {
           </View>
         )}
 
-        
-        <View style={[UI.bordered, styles.smallCard]}>
-          <View style={styles.cardHeaderRow}>
-            <Pressable onPress={() => navigation.navigate("Notifications")}>
-              <Text style={styles.cardTitle}>Notifications</Text>
-            </Pressable>
-          </View>
 
-            {notifications.length > 0 &&
-            notifications.map((n) => (
-          <View key={n.id} style={[UI.bordered, styles.smallRow]}>
-            <Text style={styles.smallRowTitle} numberOfLines={1}>
-            {n.text}
-            </Text>
-        </View>
-  ))
-}
+<View style={[UI.bordered, styles.smallCard]}>
+  <View style={styles.cardHeaderRow}>
+    <Pressable onPress={() => navigation.navigate("Notifications")}>
+      <Text style={styles.cardTitle}>Notifications</Text>
+    </Pressable>
+  </View>
 
-        </View>
+  {notifications.length > 0 ? (
+    notifications.map((n) => (
+      <View key={n.id} style={[UI.bordered, styles.smallRow]}>
+        <Text style={styles.smallRowTitle} numberOfLines={1}>
+          {n.text}
+        </Text>
+      </View>
+    ))
+  ) : (
+    <Text style={styles.cardEmpty}>Keine Notifications vorhanden.</Text>
+  )}
+</View>
+
       </View>
 
       
@@ -349,7 +351,7 @@ bottomRow: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: "COLORS.surface",
+    backgroundColor: COLORS.surface,
     justifyContent: "center",
     alignItems: "center",
   },

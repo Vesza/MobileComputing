@@ -125,7 +125,7 @@ export default function NotificationsScreen({ navigation }) {
             <Pressable style={[UI.bordered, styles.row]} onPress={() => openDetail(item)}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle} numberOfLines={3}>
-                  ❗ {item.text}
+                   {item.text}
                 </Text>
                 <Text style={styles.rowSub}>
                   {item.fireAt ? formatDateTime(item.fireAt) : "-"}

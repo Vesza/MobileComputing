@@ -36,7 +36,6 @@ export default function AppStack() {
         component={CalendarScreen}
         options={{ animation: "fade" }}
       />
-
    
       <Stack.Screen
         name="Detail"
@@ -44,7 +43,6 @@ export default function AppStack() {
         options={{ headerShown: false }}
       />
 
-      
       <Stack.Screen name="CreateTitle" component={CreateTitleScreen} />
       <Stack.Screen name="CreateDate" component={CreateDateScreen} />
       <Stack.Screen name="CreateTime" component={CreateTimeScreen} />

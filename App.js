@@ -10,7 +10,6 @@ export default function App() {
   // load custom font
   const [fontsLoaded] = useFonts({
     Awesome: require("./assets/fonts/Awesome.ttf"),
-    BuenardReg: require("./assets/fonts/MADEOkineSansPERSONALUSE_MediumOutline.otf"),
   });
 
   useEffect(() => {
