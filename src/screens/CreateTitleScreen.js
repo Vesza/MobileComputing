@@ -1,354 +1,746 @@
-import React, { useState } from "react";
+// React und Hooks für State, Memoisierung, Nebenwirkungen und stabile Callback-Funktionen.
+// useRef wird genutzt, um Audio-Objekte über Re-Renders hinweg zu behalten, ohne sie im State zu speichern.
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   Pressable,
-  Platform,
   Image,
-  Button,
   Alert,
   Modal,
+  Linking,
 } from "react-native";
+
+// expo-image-picker wird genutzt, um Bilder aus der Galerie zu wählen oder per Kamera aufzunehmen.
+// expo-av liefert Audio-Funktionen für Aufnahme und Wiedergabe.
 import * as ImagePicker from "expo-image-picker";
+import { Audio } from "expo-av";
+
+// Hilfsfunktionen, um ausgewählte Dateien in einen eigenen App-Ordner zu kopieren.
+// Damit bleiben Bild und Audio verfügbar, auch wenn die Quelle später nicht mehr existiert.
 import { saveImageToLocalAppStorageAsync } from "../services/localImages";
+import { saveAudioToLocalAppStorageAsync } from "../services/localAudio";
 
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
+// Design-Konstanten und wiederverwendbare UI-Styles.
+import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
-export default function CreateTitleScreen({ navigation }) {
+export default function CreateTitleScreen({ navigation, route }) {
+  // kind legt fest, welcher Erstell-Flow genutzt wird.
+  // Ohne Parameter wird standardmäßig ein Termin erstellt.
+  const kind = route?.params?.kind ?? "appointment";
+
+  const isAppointment = kind === "appointment";
+  const isNotification = kind === "notification";
+  const isReminder = kind === "reminder";
+
+  // headline wird abhängig vom Typ gesetzt und nur neu berechnet, wenn sich der Typ ändert.
+  const headline = useMemo(() => {
+    if (isAppointment) return "Titel eingeben";
+    if (isReminder) return "Reminder Text";
+    return "Notification Text";
+  }, [isAppointment, isReminder]);
+
+  // title ist der Haupttext, der später gespeichert wird.
   const [title, setTitle] = useState("");
+
+  // Zusatzdaten für Termine: Bild, Beschreibung und deren Modal-State.
   const [imageUri, setImageUri] = useState(null);
   const [description, setDescription] = useState("");
   const [descOpen, setDescOpen] = useState(false);
   const [descDraft, setDescDraft] = useState("");
 
+  // Sprachmemo für Termine: gespeicherte Datei und Modal-State.
+  const [audioUri, setAudioUri] = useState(null);
+  const [memoOpen, setMemoOpen] = useState(false);
+
+  // detailsOpen steuert das Bottom-Sheet, in dem Zusatzfunktionen angeboten werden.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Weiter geht es erst, wenn ein nicht-leerer Titel eingegeben wurde.
   const canContinue = title.trim().length > 0;
 
-const pickFromGallery = async () => {
-  try {
-    // Request permission (Android may already allow picker, but this avoids surprises)
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  // soundRef hält das aktuelle Sound-Objekt für Wiedergabe.
+  // recordingRef hält die laufende Aufnahme.
+  const soundRef = useRef(null);
+  const recordingRef = useRef(null);
 
-    if (!perm.granted) {
-      Alert.alert(
-        "Zugriff auf Fotos benötigt",
-        "Bitte erlaube Zugriff auf deine Galerie in den Einstellungen.",
-        [
-          { text: "Abbrechen", style: "cancel" },
-          { text: "Einstellungen öffnen", onPress: () => Linking.openSettings() },
-        ]
-      );
-      return;
+  // Statusflags für UI-Zustände bei Wiedergabe und Aufnahme.
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Beim Verlassen des Screens wird laufende Wiedergabe gestoppt und entladen.
+  // Eine laufende Aufnahme wird ebenfalls sauber beendet.
+  useEffect(() => {
+    return () => {
+      (async () => {
+        try {
+          if (soundRef.current) {
+            await soundRef.current.stopAsync();
+            await soundRef.current.unloadAsync();
+            soundRef.current = null;
+          }
+        } catch {}
+
+        try {
+          if (recordingRef.current) {
+            await recordingRef.current.stopAndUnloadAsync();
+            recordingRef.current = null;
+          }
+        } catch {}
+      })();
+    };
+  }, []);
+
+  // Bild aus der Galerie auswählen.
+  // Vorher werden Berechtigungen abgefragt, bei Ablehnung wird ein Hinweis mit Link zu den Einstellungen gezeigt.
+  // Das ausgewählte Bild wird in den App-Ordner kopiert und die neue URI gespeichert.
+  const pickFromGallery = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Zugriff auf Fotos benötigt",
+          "Bitte erlaube Zugriff auf deine Galerie in den Einstellungen.",
+          [
+            { text: "Abbrechen", style: "cancel" },
+            { text: "Einstellungen öffnen", onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+
+      if (result.canceled) return;
+
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) {
+        Alert.alert("Fehler", "Kein Bild gefunden.");
+        return;
+      }
+
+      const saved = await saveImageToLocalAppStorageAsync(uri);
+      setImageUri(saved);
+    } catch (e) {
+      console.log("Gallery picker error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
     }
+  }, []);
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"], 
-      quality: 0.8,
-    });
+  // Foto mit der Kamera aufnehmen.
+  // Berechtigung wird abgefragt, danach wird die Kamera geöffnet.
+  // Das Foto wird anschließend in den App-Ordner kopiert.
+  const takePhoto = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (perm.status !== "granted") {
+        Alert.alert("Kamera benötigt", "Bitte erlaube Zugriff auf die Kamera.");
+        return;
+      }
 
-    if (result.canceled) return;
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+      if (result.canceled) return;
 
-    const uri = result.assets?.[0]?.uri;
-    if (!uri) {
-      Alert.alert("Fehler", "Kein Bild gefunden.");
-      return;
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) return;
+
+      const saved = await saveImageToLocalAppStorageAsync(uri);
+      setImageUri(saved);
+    } catch (e) {
+      console.log("Camera error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
     }
+  }, []);
 
-    const saved = await saveImageToLocalAppStorageAsync(uri);
-    setImageUri(saved);
-  } catch (e) {
-    console.log("Gallery picker error:", e);
-    Alert.alert("Fehler", String(e?.message || e));
-  }
-};
-
-
-  const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (perm.status !== "granted") {
-      Alert.alert("Kamera benötigt", "Bitte erlaube Zugriff auf die Kamera.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
-
-    if (result.canceled) return;
-
-    const uri = result.assets?.[0]?.uri;
-    if (!uri) return;
-
-    const saved = await saveImageToLocalAppStorageAsync(uri);
-    setImageUri(saved);
-  };
-
-  const chooseImageSource = () => {
+  // Auswahl-Dialog, ob Kamera oder Galerie genutzt werden soll.
+  const chooseImageSource = useCallback(() => {
     Alert.alert("Bild hinzufügen", "Quelle auswählen", [
       { text: "Kamera", onPress: takePhoto },
       { text: "Galerie", onPress: pickFromGallery },
       { text: "Abbrechen", style: "cancel" },
     ]);
-  };
+  }, [pickFromGallery, takePhoto]);
 
-  const removeImage = () => setImageUri(null);
+  // Wiedergabe stoppen und Sound-Objekt freigeben.
+  // Dadurch wird verhindert, dass mehrere Sounds gleichzeitig laufen.
+  const stopPlayback = useCallback(async () => {
+    try {
+      if (!soundRef.current) {
+        setIsPlaying(false);
+        return;
+      }
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    } catch {}
+    setIsPlaying(false);
+  }, []);
 
-  const goNext = () => {
+  // Aufnahme starten.
+  // Berechtigung wird abgefragt, laufende Wiedergabe wird beendet.
+  // Danach wird der Audiomodus passend für Aufnahme gesetzt und die Recording-Instanz gestartet.
+  const startRecording = useCallback(async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Mikrofon benötigt", "Bitte erlaube Zugriff auf das Mikrofon.");
+        return;
+      }
+
+      await stopPlayback();
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+
+      recordingRef.current = rec;
+      setIsRecording(true);
+    } catch (e) {
+      console.log("startRecording error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
+      setIsRecording(false);
+      recordingRef.current = null;
+    }
+  }, [stopPlayback]);
+
+  // Aufnahme stoppen, Datei-URI holen und in den App-Ordner kopieren.
+  // Danach wird der Audiomodus wieder auf normales Abspielen zurückgestellt.
+  const stopRecording = useCallback(async () => {
+    try {
+      if (!recordingRef.current) return;
+
+      setIsRecording(false);
+
+      const rec = recordingRef.current;
+      recordingRef.current = null;
+
+      await rec.stopAndUnloadAsync();
+      const uri = rec.getURI();
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      if (!uri) {
+        Alert.alert("Fehler", "Aufnahme-Datei nicht gefunden.");
+        return;
+      }
+
+      const saved = await saveAudioToLocalAppStorageAsync(uri);
+      setAudioUri(saved);
+    } catch (e) {
+      console.log("stopRecording error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
+      setIsRecording(false);
+      recordingRef.current = null;
+    }
+  }, []);
+
+  // Wiedergabe umschalten.
+  // Wenn bereits gespielt wird, wird gestoppt. Andernfalls wird der Sound neu geladen und abgespielt.
+  // Ein Status-Listener sorgt dafür, dass nach dem Ende automatisch gestoppt wird.
+  const togglePlay = useCallback(async () => {
+    try {
+      if (!audioUri) return;
+
+      if (isPlaying) {
+        await stopPlayback();
+        return;
+      }
+
+      await stopPlayback();
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true }
+      );
+
+      soundRef.current = sound;
+      setIsPlaying(true);
+
+      sound.setOnPlaybackStatusUpdate((st) => {
+        if (!st || !st.isLoaded) return;
+        if (st.didJustFinish) {
+          stopPlayback();
+        }
+      });
+    } catch (e) {
+      console.log("togglePlay error:", e);
+      Alert.alert("Fehler", String(e?.message || e));
+    }
+  }, [audioUri, isPlaying, stopPlayback]);
+
+  // Memo entfernen: erst Wiedergabe stoppen, dann die gespeicherte URI löschen.
+  const removeMemo = useCallback(async () => {
+    await stopPlayback();
+    setAudioUri(null);
+  }, [stopPlayback]);
+
+  // Beschreibung öffnen: vorhandener Text wird in den Draft kopiert, dann wird das Modal geöffnet.
+  const openDescription = useCallback(() => {
+    setDescDraft(description || "");
+    setDescOpen(true);
+  }, [description]);
+
+  // Beschreibung speichern: Text wird getrimmt übernommen und das Modal geschlossen.
+  const saveDescription = useCallback(() => {
+    setDescription(descDraft.trim());
+    setDescOpen(false);
+  }, [descDraft]);
+
+  // Bottom-Sheet nur für Termine öffnen, andere Typen bekommen keine Zusatzdetails.
+  const openDetailsSheet = useCallback(() => {
+    if (!isAppointment) return;
+    setDetailsOpen(true);
+  }, [isAppointment]);
+
+  const closeDetailsSheet = useCallback(() => setDetailsOpen(false), []);
+
+  // Auswahl aus dem Sheet: erst Sheet schließen, dann die passende Funktion öffnen.
+  const openDescriptionFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    openDescription();
+  }, [openDescription]);
+
+  const openImageFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    chooseImageSource();
+  }, [chooseImageSource]);
+
+  const openMemoFromSheet = useCallback(() => {
+    setDetailsOpen(false);
+    setMemoOpen(true);
+  }, []);
+
+  // Weiter-Navigation in den Datums-Screen.
+  // Draft wird aufgebaut und enthält je nach Typ unterschiedliche Felder.
+  // Bild, Beschreibung und Audio werden nur bei Terminen mitgegeben.
+  const goNext = useCallback(() => {
     if (!canContinue) return;
 
     navigation.navigate("CreateDate", {
       draft: {
+        kind,
         title: title.trim(),
         date: null,
         time: null,
-        imageUri: imageUri ?? null,
-        description: description ?? null,
+        durationSec: null,
+
+        // appointment-only:
+        imageUri: isAppointment ? imageUri ?? null : null,
+        description: isAppointment ? (description?.trim() || null) : null,
+        audioUri: isAppointment ? audioUri ?? null : null,
       },
     });
-  };
+  }, [canContinue, navigation, kind, title, isAppointment, imageUri, description, audioUri]);
 
+  // showExtrasSummary steuert, ob die kleine Zusammenfassung der Zusatzdaten angezeigt wird.
+  const showExtrasSummary = isAppointment && (imageUri || description?.trim() || audioUri);
+
+  // UI-Aufbau: Überschrift, Eingabefeld für Titel und Weiter-Button.
+  // Bei Terminen wird zusätzlich eine Zeile angezeigt, die Summary und den Plus-Button für Details enthält.
+  // Danach folgen die Modals: Details-Sheet, Beschreibung, Sprachmemo und optional die Bildvorschau.
   return (
-    <View style={styles.container}>
-      <View style={styles.center}>
-        <Text style={styles.heading}>Titel eingeben</Text>
+    <View
+      style={[
+        UI.screen,
+        styles.container,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
+      <Text style={styles.headline}>{headline}</Text>
 
-        <TextInput
-          placeholder="Titel"
-          value={title}
-          onChangeText={setTitle}
-          style={styles.input}
-        />
+      <TextInput
+        value={title}
+        onChangeText={setTitle}
+        placeholder={isAppointment ? "Titel" : isReminder ? "Reminder Text" : "Notification Text"}
+        placeholderTextColor={COLORS.textMuted}
+        style={[UI.bordered, styles.input]}
+      />
 
+      <Pressable
+        onPress={canContinue ? goNext : null}
+        style={[UI.primaryButton, !canContinue && UI.primaryButtonDisabled]}
+      >
+        <Text style={[UI.primaryButtonText, !canContinue && UI.primaryButtonTextDisabled]}>
+          Weiter
+        </Text>
+      </Pressable>
 
-        {imageUri ? (
-          <>
-            <View style={{ height: 12 }} />
-            <Image source={{ uri: imageUri }} style={styles.preview} />
-            <View style={{ height: 8 }} />
-            <Pressable onPress={removeImage}>
-              <Text style={styles.removeLink}>Bild entfernen</Text>
+      {isAppointment ? (
+        <View style={styles.detailsRow}>
+          <View style={styles.detailsCenter}>
+           {showExtrasSummary ? (
+            <View style={[UI.bordered, styles.summaryCard]}>
+              {description?.trim() ? <Text style={styles.summaryLine}>✓ Beschreibung</Text> : null}
+              {imageUri ? <Text style={styles.summaryLine}>✓ Bild</Text> : null}
+              {audioUri ? <Text style={styles.summaryLine}>✓ Sprachmemo</Text> : null}
+            </View>
+            ) : null}
+        </View>
+
+    <Pressable
+      onPress={openDetailsSheet}
+      style={[UI.bordered, styles.squareBtn]}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Text style={styles.squareTextIcon}>＋</Text>
+    </Pressable>
+  </View>
+) : null}
+
+      <Modal
+        visible={detailsOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDetailsSheet}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={closeDetailsSheet}>
+          <Pressable style={[UI.bordered, styles.sheet]} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Details hinzufügen</Text>
+
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openDescriptionFromSheet}>
+              <Text style={styles.sheetItemText}>📝 Beschreibung</Text>
             </Pressable>
-          </>
-        ) : null}
 
-        <View style={{ height: 14 }} />
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openImageFromSheet}>
+              <Text style={styles.sheetItemText}>🖼️ Bild</Text>
+            </Pressable>
 
-        <Pressable
-          onPress={canContinue ? goNext : null}
-          style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}
-        >
-          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>
-            Weiter
-          </Text>
+            <Pressable style={[UI.bordered, styles.sheetItem]} onPress={openMemoFromSheet}>
+              <Text style={styles.sheetItemText}>🎙️ Sprachmemo</Text>
+            </Pressable>
+
+            <View style={{ height: 8 }} />
+
+            <Pressable style={[UI.bordered, styles.sheetCancel]} onPress={closeDetailsSheet}>
+              <Text style={styles.sheetCancelText}>Abbrechen</Text>
+            </Pressable>
+          </Pressable>
         </Pressable>
-      </View>
-        
-        <View style={styles.fabContainer}>
-        {/* Add image */}
+      </Modal>
 
-        <Pressable style={styles.fabButton} onPress={chooseImageSource}>
-          <Text style={styles.fabIcon}>🖼️</Text>
-        </Pressable>
-
-        {/* Add description */}
-        <Pressable
-         style={styles.fabButton}
-         onPress={() => {
-          setDescDraft(description); // preload existing text
-          setDescOpen(true);         // open notepad modal
-         }}
-        >
-         <Text style={styles.fabIcon}>📝</Text>
-        </Pressable>
-         </View>
-    <Modal
+      <Modal
         visible={descOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setDescOpen(false)}
-    >
-     <View style={styles.descBackdrop}>
-         <View style={styles.descSheet}>
-          <Text style={styles.descTitle}>Notizen</Text>
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDescOpen(false)}>
+          <Pressable style={[UI.bordered, styles.modalBox]} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Beschreibung</Text>
 
-      <TextInput
-        value={descDraft}
-        onChangeText={setDescDraft}
-        placeholder="Schreibe hier deine Beschreibung..."
-        multiline
-        textAlignVertical="top"
-        style={styles.descInput}
-      />
+            <TextInput
+              value={descDraft}
+              onChangeText={setDescDraft}
+              placeholder="Beschreibung hinzufügen…"
+              placeholderTextColor={COLORS.textMuted}
+              style={[UI.bordered, styles.descInput]}
+              multiline
+            />
 
-      <View style={styles.descButtonsRow}>
-        <Pressable
-          style={[styles.descBtn, styles.descBtnSecondary]}
-          onPress={() => setDescOpen(false)}
-        >
-          <Text style={styles.descBtnTextDark}>Abbrechen</Text>
+            <View style={styles.modalRow}>
+              <Pressable style={[UI.bordered, styles.modalBtn]} onPress={() => setDescOpen(false)}>
+                <Text style={styles.modalBtnText}>Abbrechen</Text>
+              </Pressable>
+
+              <Pressable style={[UI.primaryButton, styles.modalBtn]} onPress={saveDescription}>
+                <Text style={UI.primaryButtonText}>Speichern</Text>
+              </Pressable>
+            </View>
+          </Pressable>
         </Pressable>
-
-        <Pressable
-          style={[styles.descBtn, styles.descBtnPrimary]}
-          onPress={() => {
-            setDescription(descDraft.trim());
-            setDescOpen(false);
-          }}
-        >
-              <Text style={styles.descBtnTextWhite}>Speichern</Text>
-             </Pressable>
-          </View>
-        </View>
-      </View>
       </Modal>
 
-
-
-      <Pressable
-        onPress={() => navigation.goBack()}
-        style={[styles.bottomPressable, styles.left]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+      <Modal
+        visible={memoOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMemoOpen(false)}
       >
-        <Text style={styles.bottomLinkText}>Zurück</Text>
-      </Pressable>
+        <Pressable style={styles.modalBackdrop} onPress={() => setMemoOpen(false)}>
+          <Pressable style={[UI.bordered, styles.modalBox]} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Sprachmemo</Text>
 
-      <Pressable
-        onPress={() => navigation.navigate("Welcome")}
-        style={[styles.bottomPressable, styles.right]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Text style={styles.bottomLinkText}>Welcome</Text>
-      </Pressable>
+            <View style={{ height: 10 }} />
+
+            <Pressable
+              onPress={isRecording ? stopRecording : startRecording}
+              style={[UI.primaryButton, styles.fullBtn]}
+            >
+              <Text style={UI.primaryButtonText}>
+                {isRecording ? "Stop Aufnahme" : "Aufnehmen"}
+              </Text>
+            </Pressable>
+
+            <View style={{ height: 10 }} />
+
+            <Pressable
+              onPress={togglePlay}
+              disabled={!audioUri || isRecording}
+              style={[
+                UI.bordered,
+                styles.fullBtn,
+                (!audioUri || isRecording) && styles.btnDisabled,
+              ]}
+            >
+              <Text style={styles.modalBtnText}>
+                {isPlaying ? "Stop" : "Play"}
+              </Text>
+            </Pressable>
+
+            <View style={{ height: 10 }} />
+
+            <Pressable
+              onPress={removeMemo}
+              disabled={!audioUri || isRecording}
+              style={[
+                UI.bordered,
+                styles.fullBtn,
+                (!audioUri || isRecording) && styles.btnDisabled,
+              ]}
+            >
+              <Text style={styles.modalBtnText}>Memo entfernen</Text>
+            </Pressable>
+
+            <View style={{ height: 12 }} />
+
+            <Pressable style={[UI.bordered, styles.sheetCancel]} onPress={() => setMemoOpen(false)}>
+              <Text style={styles.sheetCancelText}>Schließen</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {isAppointment && imageUri ? (
+        <View style={[UI.bordered, styles.previewCard]}>
+          <Image source={{ uri: imageUri }} style={styles.previewImage} />
+          <Pressable onPress={() => setImageUri(null)} style={styles.removePill}>
+            <Text style={styles.removePillText}>Entfernen</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
+// Styles: Container, Eingabefeld, Detailzeile mit Summary und Plus-Button.
+// Außerdem Styles für Bottom-Sheet, Modals und Bildvorschau.
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
-
-  heading: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
-
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 8,
-    marginBottom: 12,
-    borderRadius: 4,
-  },
-
-  preview: { width: 180, height: 180, borderRadius: 12, alignSelf: "center" },
-
-  removeLink: { color: "grey", textDecorationLine: "underline", textAlign: "center" },
-
-
-  fabContainer: {
-    position: "absolute",
-   right: 20,
-   bottom: BOTTOM_OFFSET + 70, // above Zurück / Weiter
-   flexDirection: "row",
-   gap: 12,
-  },
-
-  fabButton: {
-   width: 56,
-   height: 56,
-   borderRadius: 12,
-   backgroundColor: "#f2f2f2",
-   justifyContent: "center",
-   alignItems: "center",
-   borderWidth: 1,
-   borderColor: "#ddd",
-  },
-
-  fabIcon: {
-    fontSize: 24,
-  },
-
-  descBackdrop: {
-  flex: 1,
-  backgroundColor: "rgba(0,0,0,0.35)",
-  justifyContent: "center",
-  alignItems: "center",
-  padding: 20,
-},
-descSheet: {
-  width: "100%",
-  maxWidth: 420,
-  backgroundColor: "white",
-  borderRadius: 14,
-  padding: 16,
-  borderWidth: 1,
-  borderColor: "#ddd",
-},
-descTitle: {
-  fontSize: 16,
-  fontWeight: "bold",
-  marginBottom: 10,
-  textAlign: "center",
-},
-descInput: {
-  height: 260,
-  borderWidth: 1,
-  borderColor: "#ddd",
-  borderRadius: 12,
-  padding: 12,
-  fontSize: 16,
-  backgroundColor: "#fafafa",
-},
-descButtonsRow: {
-  flexDirection: "row",
-  gap: 10,
-  marginTop: 12,
-},
-descBtn: {
-  flex: 1,
-  paddingVertical: 12,
-  borderRadius: 10,
-  alignItems: "center",
-  borderWidth: 1,
-},
-descBtnPrimary: {
-  backgroundColor: "#007AFF",
-  borderColor: "#007AFF",
-},
-descBtnSecondary: {
-  backgroundColor: "#f2f2f2",
-  borderColor: "#ddd",
-},
-descBtnTextWhite: {
-  color: "white",
-  fontWeight: "bold",
-},
-descBtnTextDark: {
-  color: "#333",
-  fontWeight: "bold",
-},
-
-
-
-  nextBtn: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  nextBtnDisabled: { backgroundColor: "#ccc" },
-  nextBtnText: { color: "white", fontWeight: "bold" },
-  nextBtnTextDisabled: { color: "#888" },
-
-  bottomPressable: {
-    position: "absolute",
-    bottom: BOTTOM_OFFSET,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    minWidth: 140,
-    minHeight: 56,
+  container: {
+    paddingHorizontal: 20,
+    flex: 1,
     justifyContent: "center",
   },
-  bottomLinkText: { color: "grey", textDecorationLine: "underline" },
-  left: { left: 10 },
-  right: { right: 10, alignItems: "flex-end" },
-});
 
+  headline: {
+    textAlign: "center",
+    fontSize: FONT_SIZE.title,
+    fontWeight: FONT_WEIGHT.normal,
+    color: COLORS.text,
+    marginBottom: 14,
+  },
+
+  input: {
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+
+detailsRow: {
+  width: "100%",
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginTop: 12,
+},
+
+detailsCenter: {
+  flex: 1,
+  alignItems: "center",
+},
+
+  squareBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  squareTextIcon: {
+    fontSize: 22,
+    color: COLORS.text,
+  },
+
+  summaryCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    minWidth: 160,
+  },
+
+  summaryLine: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.normal,
+    textAlign: "center",
+  },
+
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 14,
+  },
+
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 14,
+  },
+
+  sheetTitle: {
+    fontSize: FONT_SIZE.heading,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+
+  sheetItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 10,
+  },
+
+  sheetItemText: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+  },
+
+  sheetCancel: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.disabled,
+    alignItems: "center",
+  },
+
+  sheetCancelText: {
+    fontSize: FONT_SIZE.body,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.textMuted,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+
+  modalBox: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    padding: 16,
+  },
+
+  modalTitle: {
+    textAlign: "center",
+    fontSize: FONT_SIZE.heading,
+    fontWeight: FONT_WEIGHT.bold,
+    color: COLORS.text,
+  },
+
+  descInput: {
+    marginTop: 12,
+    minHeight: 120,
+    textAlignVertical: "top",
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    padding: 12,
+    borderRadius: 12,
+  },
+
+  modalRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+
+  modalBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+
+  modalBtnText: {
+    color: COLORS.text,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+
+  fullBtn: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+  },
+
+  btnDisabled: {
+    opacity: 0.5,
+    backgroundColor: COLORS.disabled,
+  },
+
+  previewCard: {
+    marginTop: 18,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: COLORS.surface,
+  },
+
+  previewImage: {
+    width: "100%",
+    height: 140,
+  },
+
+  removePill: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    backgroundColor: "rgba(250, 248, 248, 0.85)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+
+  removePillText: {
+    color: COLORS.text,
+    fontWeight: FONT_WEIGHT.bold,
+  },
+});

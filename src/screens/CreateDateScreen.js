@@ -1,60 +1,70 @@
-import React, { useState } from "react";
+// React und Hooks für State und Nebenwirkungen.
+// View/Text/Button/Pressable sind UI-Bausteine, Platform wird für plattformspezifisches Verhalten genutzt.
+import React, { useEffect, useState } from "react";
 import { View, Text, Button, StyleSheet, Pressable, Platform } from "react-native";
+
+// DateTimePicker zeigt die native Datumsauswahl an.
+// formatDDMMYYYY formatiert ein Date-Objekt als deutsches Datum.
+// UI/LAYOUT/COLORS/FONT_SIZE liefern Standard-Styles und Design-Konstanten.
 import DateTimePicker from "@react-native-community/datetimepicker";
-
-const BOTTOM_OFFSET = Platform.OS === "android" ? 80 : 40;
-
-function formatDDMMYYYY(date) {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = date.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
-}
+import { formatDDMMYYYY } from "../utils/datetime";
+import { UI, LAYOUT, COLORS, FONT_SIZE } from "../constants";
 
 export default function CreateDateScreen({ navigation, route }) {
+  // showPicker steuert, ob der DatePicker angezeigt wird.
   const [showPicker, setShowPicker] = useState(false);
 
-  // draft comes from previous screen
-  const draft = route?.params?.draft ?? { title: "", date: "", time: "" };
-  const value = draft.date ?? "";
+  // draft kommt aus dem vorherigen Screen und enthält die bisher gesammelten Daten.
+  // Wenn nichts übergeben wurde, wird ein Standard-Draft erstellt.
+  const draft = route?.params?.draft ?? { kind: "appointment", title: "", date: null, time: null };
+  const [value, setValue] = useState(draft.date ?? "");
 
-  const handleChange = (event, selectedDate) => {
+  // Wenn sich draft.date ändert, wird der lokale State value aktualisiert.
+  // Dadurch bleibt die Anzeige synchron zu den Navigation-Params.
+  useEffect(() => {
+    setValue(draft.date ?? "");
+  }, [draft.date]);
+
+  // handleChange bekommt das ausgewählte Datum aus dem Picker.
+  // Auf Android wird der Picker nach einer Auswahl direkt wieder geschlossen.
+  // Das Datum wird formatiert, lokal gespeichert und zusätzlich in die Navigation-Params zurückgeschrieben.
+  const handleChange = (_event, selectedDate) => {
     if (Platform.OS === "android") setShowPicker(false);
     if (!selectedDate) return;
 
     const newDate = formatDDMMYYYY(selectedDate);
-    // update local draft (in params we can only pass forward)
+    setValue(newDate);
     navigation.setParams({ draft: { ...draft, date: newDate } });
   };
 
+  // Weiter geht es nur, wenn ein Datum gesetzt wurde.
   const canContinue = value && value.length > 0;
 
-const goNext = () => {
-  if (!canContinue) return;
-
-  navigation.navigate("CreateTime", {
-    draft: {
-      ...draft,   // keep title, imageUri, description.
-      date: value // overwrite with the selected date
-    },
-  });
-};
-
-
-  const goBack = () => {
-    navigation.goBack();
+  // Navigation zum nächsten Schritt, dabei wird der Draft mit dem aktuellen Datum weitergegeben.
+  const goNext = () => {
+    if (!canContinue) return;
+    navigation.navigate("CreateTime", { draft: { ...draft, date: value } });
   };
 
-  const goHome = () => {
-    navigation.navigate("Welcome");
-  };
-
+  // Layout nutzt UI.screen als Basis und setzt top/bottom Padding aus LAYOUT.
+  // In der Mitte wird der aktuelle Wert angezeigt oder ein Hinweistext.
+  // Der Picker wird nur gerendert, wenn showPicker true ist.
+  // Auf iOS wird zusätzlich ein "Fertig"-Button angezeigt, um den Picker zu schließen.
+  // Der Weiter-Button ist deaktiviert, solange kein Datum vorhanden ist.
   return (
-    <View style={styles.container}>
-      <View style={styles.center}>
-        <Text style={styles.heading}>Datum auswählen</Text>
+    <View
+      style={[
+        UI.screen,
+        {
+          paddingTop: LAYOUT.offsets.top,
+          paddingBottom: LAYOUT.offsets.bottom,
+        },
+      ]}
+    >
+      <View style={UI.center}>
+        <Text style={UI.heading}>Datum auswählen</Text>
 
-        <Pressable style={styles.pickBox} onPress={() => setShowPicker(true)}>
+        <Pressable style={[UI.bordered, styles.pickBox]} onPress={() => setShowPicker(true)}>
           <Text style={styles.pickText}>{value || "Hier tippen, um Datum zu wählen"}</Text>
         </Pressable>
 
@@ -62,7 +72,7 @@ const goNext = () => {
           <DateTimePicker
             value={new Date()}
             mode="date"
-            display={Platform.OS === "ios" ? "inline" : "default"}
+            display={LAYOUT.datePickerDisplay}
             onChange={handleChange}
           />
         )}
@@ -76,69 +86,27 @@ const goNext = () => {
 
         <Pressable
           onPress={canContinue ? goNext : null}
-          style={[styles.nextBtn, !canContinue && styles.nextBtnDisabled]}
+          style={[UI.primaryButton, !canContinue && UI.primaryButtonDisabled]}
         >
-          <Text style={[styles.nextBtnText, !canContinue && styles.nextBtnTextDisabled]}>
-            Weiter
+          <Text style={[UI.primaryButtonText, !canContinue && UI.primaryButtonTextDisabled]}>
+            Uhrzeit angeben
           </Text>
         </Pressable>
       </View>
 
-      <Pressable
-        onPress={goBack}
-        style={[styles.bottomPressable, styles.left]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Text style={styles.bottomLinkText}>Zurück</Text>
-      </Pressable>
-
-      <Pressable
-        onPress={goHome}
-        style={[styles.bottomPressable, styles.right]}
-        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-      >
-        <Text style={styles.bottomLinkText}>Welcome</Text>
-      </Pressable>
     </View>
   );
 }
 
+// Styles für die Datumsauswahl:
+// pickBox ist der klickbare Bereich, der den Picker öffnet.
+// pickText steuert Farbe und Schriftgröße des angezeigten Datums oder Hinweistextes.
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
-
-  heading: { fontSize: 18, fontWeight: "bold", marginBottom: 12, textAlign: "center" },
-
   pickBox: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
     padding: 14,
     alignItems: "center",
     marginBottom: 12,
+    backgroundColor: COLORS.surface,
   },
-  pickText: { color: "grey", fontSize: 16 },
-
-  nextBtn: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  nextBtnDisabled: { backgroundColor: "#ccc" },
-  nextBtnText: { color: "white", fontWeight: "bold" },
-  nextBtnTextDisabled: { color: "#888" },
-
-  bottomPressable: {
-    position: "absolute",
-    bottom: BOTTOM_OFFSET,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    minWidth: 140,
-    minHeight: 56,
-    justifyContent: "center",
-  },
-  bottomLinkText: { color: "grey", textDecorationLine: "underline" },
-  left: { left: 10 },
-  right: { right: 10, alignItems: "flex-end" },
+  pickText: { color: COLORS.textMuted, fontSize: FONT_SIZE.body },
 });
