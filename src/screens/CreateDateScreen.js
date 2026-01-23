@@ -47,16 +47,14 @@ export default function CreateDateScreen({ navigation, route }) {
           <Text style={styles.pickText}>{value || "Hier tippen, um Datum zu wählen"}</Text>
         </Pressable>
 
-       {showPicker && (
-         <DateTimePicker
-          value={new Date()}
-          mode="date"
-          display="default"
-          onChange={handleChange}
-          accentColor={COLORS.surface} // 👈 put it HERE
+        {showPicker && (
+          <DateTimePicker
+            value={new Date()}
+            mode="date"
+            display={LAYOUT.datePickerDisplay}
+            onChange={handleChange}
           />
         )}
-
 
         {Platform.OS === "ios" && showPicker ? <View style={{ height: 10 }} /> : null}
         {Platform.OS === "ios" && showPicker ? (
