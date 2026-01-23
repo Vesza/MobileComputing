@@ -1,5 +1,12 @@
+// React wird für die Komponente benötigt, useState für lokale Zustände (Modal offen/Loading),
+// useCallback für eine stabile Confirm-Funktion.
+// Pressable/Text sind UI-Bausteine, StyleSheet enthält die Styles.
 import React, { useState, useCallback } from "react";
 import { Pressable, Text, StyleSheet } from "react-native";
+
+// ConfirmModal ist das Bestätigungs-Modal für den Logout.
+// useAuth liefert die logout-Funktion aus dem AuthContext.
+// COLORS/FONT_SIZE/FONT_WEIGHT/UI liefern Design-Konstanten und Standard-Styles.
 import ConfirmModal from "./ConfirmModal";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, FONT_SIZE, FONT_WEIGHT, UI } from "../constants";
@@ -9,6 +16,9 @@ export default function HeaderLogoutButton() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Wird aufgerufen, wenn im Modal "Ja" gedrückt wird.
+  // loading sorgt dafür, dass der Button nicht mehrfach ausgelöst wird.
+  // Nach erfolgreichem Logout wird das Modal geschlossen.
   const onConfirm = useCallback(async () => {
     try {
       setLoading(true);
@@ -19,6 +29,10 @@ export default function HeaderLogoutButton() {
     }
   }, [logout]);
 
+  // UI-Aufbau:
+  // Ein Pressable-Button im Header öffnet das Modal.
+  // hitSlop vergrößert den tappbaren Bereich, damit der Button leichter zu treffen ist.
+  // ConfirmModal wird eingeblendet, sobald open true ist, und nutzt loading für deaktivierte Aktionen.
   return (
     <>
       <Pressable
@@ -44,6 +58,9 @@ export default function HeaderLogoutButton() {
   );
 }
 
+// Styles für den Header-Button:
+// btn definiert Padding, Hintergrund und Rundungen.
+// text setzt Farbe, Schriftgröße und Gewicht passend zum restlichen Design.
 const styles = StyleSheet.create({
   btn: {
     paddingHorizontal: 12,

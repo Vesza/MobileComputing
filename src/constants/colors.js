@@ -1,3 +1,5 @@
+// Zentrale Farbpalette der App.
+// Diese Werte werden in Styles verwendet, damit Farben nicht überall hart im Code stehen.
 export const COLORS = {
   primary:"#fcf8f8",     
   primaryText: "#FFFFFF",

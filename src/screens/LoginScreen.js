@@ -1,24 +1,42 @@
+// React Hooks werden genutzt, um Eingaben und Status im Screen zu verwalten.
+// useRef hält hier einen Timer fest, damit Statusmeldungen nach ein paar Sekunden wieder verschwinden.
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet } from "react-native";
+
+// Firebase Auth wird für den Login und das erneute Senden der Verifizierungs-Mail verwendet.
+// Firestore wird genutzt, um nach erfolgreichem Login einen Zeitstempel im User-Dokument zu speichern.
 import { signInWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { auth, db } from "../services/FirebaseConfig";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
+// Gemeinsame Styles und Layout-Abstände aus den Konstanten.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function LoginScreen({ navigation }) {
+  // State für die beiden Eingabefelder und eine Statusmeldung unter den Buttons.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [status, setStatus] = useState("");
+
+  // showResend steuert, ob der Link zum erneuten Senden der Bestätigungsmail angezeigt wird.
+  // pendingVerifyUser speichert das Firebase-User-Objekt, wenn der Account noch nicht verifiziert ist.
   const [showResend, setShowResend] = useState(false);
   const [pendingVerifyUser, setPendingVerifyUser] = useState(null);
+
+  // Referenz auf einen Timeout, damit sich Statusmeldungen automatisch zurücksetzen lassen.
   const statusTimerRef = useRef(null);
 
+  // Cleanup: Wenn der Screen verlassen wird, wird ein laufender Timer entfernt,
+  // damit kein setState mehr nach dem Unmount passiert.
   useEffect(() => {
     return () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
     };
   }, []);
 
+  // Hilfsfunktion für Statusmeldungen, die nach 5 Sekunden wieder verschwinden.
+  // Vorher wird ein eventuell laufender Timer abgebrochen, damit Nachrichten nicht durcheinander laufen.
   const showTemporaryStatus = (message) => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
 
@@ -29,6 +47,12 @@ export default function LoginScreen({ navigation }) {
     }, 5000);
   };
 
+  // Login-Logik:
+  // 1) Prüfen, ob E-Mail und Passwort vorhanden sind
+  // 2) Mit Firebase anmelden
+  // 3) User neu laden, damit emailVerified sicher aktuell ist
+  // 4) Wenn nicht verifiziert, zum Verify-Screen wechseln und Resend-Option anzeigen
+  // 5) Wenn verifiziert, Login-Zeitpunkt im Firestore speichern
   const handleLogin = async () => {
     if (!email || !password) {
       showTemporaryStatus("Bitte E-Mail und Passwort eingeben.");
@@ -71,6 +95,7 @@ export default function LoginScreen({ navigation }) {
     } catch (e) {
       console.log("Login-Fehler:", e);
 
+      // Standard-Fehlermeldung, die je nach Firebase Error-Code konkreter gemacht wird.
       let message = "Login fehlgeschlagen.";
 
       if (e.code === "auth/user-not-found") {
@@ -89,6 +114,8 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // Erneutes Senden der Verifizierungs-Mail.
+  // Das geht nur, wenn vorher ein nicht-verifizierter User gespeichert wurde.
   const handleResendMail = async () => {
     try {
       if (!pendingVerifyUser) {
@@ -104,6 +131,10 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // UI:
+  // Eingabefelder für E-Mail und Passwort, Buttons für Login und Wechsel zur Registrierung.
+  // Optional wird ein Link angezeigt, um den Bestätigungslink erneut zu senden.
+  // Unten wird eine Statusmeldung eingeblendet, wenn eine vorhanden ist.
   return (
     <View
       style={[
@@ -153,6 +184,8 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+// Styles für Layout und Farben des Login-Screens.
+// container zentriert den Inhalt, input formatiert die Textfelder, status und link sind für Hinweise unter den Buttons.
 const styles = StyleSheet.create({
   container: {
     justifyContent: "center",

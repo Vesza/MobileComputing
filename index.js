@@ -1,8 +1,10 @@
+// registerRootComponent ist der Expo-Einstiegspunkt, der die App korrekt registriert.
+// Dadurch funktioniert der Start sowohl in Expo Go als auch in einem nativen Build.
 import { registerRootComponent } from 'expo';
 
+// Importiert die eigentliche App-Komponente aus App.js.
 import App from './App';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
+// App wird als Root-Komponente registriert.
+// Expo kümmert sich dabei um die passende Initialisierung der Umgebung.
 registerRootComponent(App);

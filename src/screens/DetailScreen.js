@@ -1,3 +1,5 @@
+// React + Hooks für Lifecycle, Memoisierung und Ref-Handling.
+// useLayoutEffect wird genutzt, um Navigation-Optionen direkt vor dem Render zu setzen.
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -8,9 +10,15 @@ import {
   Modal,
   ScrollView,
 } from "react-native";
+
+// expo-av wird hier nur für die Audio-Wiedergabe genutzt.
 import { Audio } from "expo-av";
+
+// Gemeinsame Styles und Design-Konstanten.
 import { UI, LAYOUT, COLORS, FONT_WEIGHT, FONT_SIZE } from "../constants";
 
+// Hilfsfunktion, um verschiedene Datumsformate robust in ein Date-Objekt umzuwandeln.
+// Unterstützt Firestore Timestamps, Date-Objekte und ISO-Strings.
 function parseDateAny(x) {
   if (!x) return null;
 
@@ -20,10 +28,12 @@ function parseDateAny(x) {
     return d instanceof Date && !Number.isNaN(d.getTime()) ? d : null;
   }
 
+  // Normales Date-Objekt
   if (x instanceof Date) {
     return !Number.isNaN(x.getTime()) ? x : null;
   }
 
+  // ISO-String oder ähnlicher Datumsstring
   if (typeof x === "string") {
     const d = new Date(x);
     return !Number.isNaN(d.getTime()) ? d : null;
@@ -32,6 +42,7 @@ function parseDateAny(x) {
   return null;
 }
 
+// Formatiert ein Date in kurze Datum- und Zeit-Strings für die Anzeige.
 function formatDateParts(d) {
   const date = d.toLocaleDateString("de-DE", {
     weekday: "short",
@@ -43,25 +54,32 @@ function formatDateParts(d) {
   return { date, time };
 }
 
+// Sorgt dafür, dass Titeltexte nicht leer oder nur Whitespace sind.
+// Wenn nichts Sinnvolles da ist, wird ein Fallback angezeigt.
 function safeText(x, fallback = "-") {
   const t = typeof x === "string" ? x.trim() : "";
   return t.length ? t : fallback;
 }
 
 export default function DetailScreen({ navigation, route }) {
+  // type bestimmt, welche Daten erwartet werden und wie gerendert wird.
+  // item enthält die eigentlichen Daten, die per Navigation übergeben wurden.
   const type = route?.params?.type; // appointment, reminder, notification
   const item = route?.params?.item;
 
+  // previewUri wird gesetzt, wenn ein Bild angetippt wird, um es im Modal groß zu zeigen.
   const [previewUri, setPreviewUri] = useState(null);
 
-  // audio playback
+  // Audio-Wiedergabe: Sound-Instanz liegt in einem Ref, Status im State.
   const soundRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Der Screen hat seine eigene Darstellung, daher wird der Stack-Header deaktiviert.
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
+  // Cleanup: Beim Verlassen wird eine laufende Wiedergabe gestoppt und entladen.
   useEffect(() => {
     return () => {
       (async () => {
@@ -76,6 +94,8 @@ export default function DetailScreen({ navigation, route }) {
     };
   }, []);
 
+  // Normalisiert die verschiedenen Typen in eine gemeinsame Struktur.
+  // So kann das UI später einfacher arbeiten, ohne überall Sonderfälle zu bauen.
   const normalized = useMemo(() => {
     if (!item || !type) return null;
 
@@ -104,11 +124,14 @@ export default function DetailScreen({ navigation, route }) {
     return null;
   }, [item, type]);
 
+  // Aus dem normalisierten Datum werden Anzeige-Strings gebaut.
+  // Falls kein Datum vorhanden ist, werden Platzhalter angezeigt.
   const pretty = useMemo(() => {
     if (!normalized?.datetime) return { date: "-", time: "-" };
     return formatDateParts(normalized.datetime);
   }, [normalized]);
 
+  // Header-Label, damit der Screen klar macht, welche Art von Detail gezeigt wird.
   const headerLabel =
     normalized?.type === "appointment"
       ? "Termin"
@@ -118,6 +141,8 @@ export default function DetailScreen({ navigation, route }) {
       ? "Notification"
       : "Detail";
 
+  // Stoppt die Audio-Wiedergabe und gibt Ressourcen frei.
+  // Das wird sowohl im Toggle als auch im Cleanup genutzt.
   const stopPlayback = async () => {
     try {
       if (!soundRef.current) {
@@ -131,6 +156,9 @@ export default function DetailScreen({ navigation, route }) {
     setIsPlaying(false);
   };
 
+  // Startet oder stoppt die Wiedergabe.
+  // Vor dem Abspielen wird ein sauberer Zustand hergestellt, damit kein alter Sound hängen bleibt.
+  // Ein Playback-Listener stoppt automatisch, wenn die Datei fertig abgespielt ist.
   const togglePlay = async () => {
     try {
       if (!normalized?.audioUri) return;
@@ -166,6 +194,7 @@ export default function DetailScreen({ navigation, route }) {
     }
   };
 
+  // Wenn kein Element korrekt übergeben wurde, wird eine einfache Fehlansicht gezeigt.
   if (!normalized) {
     return (
       <View
@@ -181,6 +210,8 @@ export default function DetailScreen({ navigation, route }) {
     );
   }
 
+  // Für Termine wird ein kompletter Detailbereich gerendert.
+  // Für andere Typen wird aktuell nur eine Info-Card angezeigt.
   const isAppointment = normalized.type === "appointment";
 
   return (
@@ -193,14 +224,11 @@ export default function DetailScreen({ navigation, route }) {
     >
       <Text style={styles.smallHeader}>{headerLabel}</Text>
 
-<View style={styles.titleBox}>
-  <Text style={styles.title} numberOfLines={2}>
-    {normalized.title}
-  </Text>
-</View>
-
-
-
+      <View style={styles.titleBox}>
+        <Text style={styles.title} numberOfLines={2}>
+          {normalized.title}
+        </Text>
+      </View>
 
       <View style={styles.metaRow}>
         <View style={styles.pill}>
@@ -211,61 +239,57 @@ export default function DetailScreen({ navigation, route }) {
         </View>
       </View>
 
-  <ScrollView contentContainerStyle={styles.scroll}>
-  {isAppointment ? (
-    <>
-      {/* Beschreibung */}
-      <View style={[UI.bordered, styles.card]}>
-        <Text style={styles.cardTitle}>Beschreibung</Text>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {isAppointment ? (
+          <>
+            <View style={[UI.bordered, styles.card]}>
+              <Text style={styles.cardTitle}>Beschreibung</Text>
 
-        {normalized.description?.trim() ? (
-          <Text style={styles.cardText}>{normalized.description}</Text>
-        ) : null}
-      </View>
-
-      {/* Bild */}
-      <View style={[UI.bordered, styles.card]}>
-        <Text style={styles.cardTitle}>Bild</Text>
-
-        {normalized.imageUri ? (
-          <Pressable
-            onPress={() => setPreviewUri(normalized.imageUri)}
-            style={[UI.bordered, styles.imagePressable]}
-          >
-            <Image
-              source={{ uri: normalized.imageUri }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-            <View style={styles.imageOverlay}>
-              <Text style={styles.imageOverlayText}>Tippen zum Vergrößern</Text>
+              {normalized.description?.trim() ? (
+                <Text style={styles.cardText}>{normalized.description}</Text>
+              ) : null}
             </View>
-          </Pressable>
-        ) : null}
-      </View>
 
-      {/* Sprachmemo */}
-      <View style={[UI.bordered, styles.card]}>
-        <Text style={styles.cardTitle}>Sprachmemo</Text>
+            <View style={[UI.bordered, styles.card]}>
+              <Text style={styles.cardTitle}>Bild</Text>
 
-        {normalized.audioUri ? (
-          <Pressable onPress={togglePlay} style={[UI.primaryButton, styles.audioBtn]}>
-            <Text style={UI.primaryButtonText}>
-              {isPlaying ? "Stop" : "Play"}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </>
-    ) : (
-      <View style={[UI.bordered, styles.card]}>
-        <Text style={styles.cardTitle}>Info</Text>
-      </View>
-    )}
+              {normalized.imageUri ? (
+                <Pressable
+                  onPress={() => setPreviewUri(normalized.imageUri)}
+                  style={[UI.bordered, styles.imagePressable]}
+                >
+                  <Image
+                    source={{ uri: normalized.imageUri }}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.imageOverlay}>
+                    <Text style={styles.imageOverlayText}>Tippen zum Vergrößern</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
 
-  <View style={{ height: 120 }} />
-</ScrollView>
+            <View style={[UI.bordered, styles.card]}>
+              <Text style={styles.cardTitle}>Sprachmemo</Text>
 
+              {normalized.audioUri ? (
+                <Pressable onPress={togglePlay} style={[UI.primaryButton, styles.audioBtn]}>
+                  <Text style={UI.primaryButtonText}>
+                    {isPlaying ? "Stop" : "Play"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </>
+        ) : (
+          <View style={[UI.bordered, styles.card]}>
+            <Text style={styles.cardTitle}>Info</Text>
+          </View>
+        )}
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
 
       <Modal
         visible={!!previewUri}
@@ -285,8 +309,8 @@ export default function DetailScreen({ navigation, route }) {
   );
 }
 
+// Styles für Screen-Layout, Karten, Meta-Pills, Bild-Preview und Titelbox.
 const styles = StyleSheet.create({
-
   screen: {
     paddingHorizontal: 20,
   },
@@ -329,7 +353,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  // scroll content
   scroll: {
     paddingBottom: 40,
   },
@@ -408,22 +431,20 @@ const styles = StyleSheet.create({
 
   previewImage: { width: "95%", height: "95%" },
 
-titleBox: {
-  alignSelf: "flex-start",    
-  backgroundColor: COLORS.disabled,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: COLORS.border,
-  paddingVertical: 4,
-  paddingHorizontal: 12,
-  marginBottom: 12,
-},
+  titleBox: {
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.disabled,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
 
-title: {
-  color: COLORS.text,            
-  fontSize: 18,
-  fontWeight: FONT_WEIGHT.normal,
-},
-
-
+  title: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: FONT_WEIGHT.normal,
+  },
 });

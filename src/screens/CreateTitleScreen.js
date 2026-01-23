@@ -1,3 +1,5 @@
+// React und Hooks für State, Memoisierung, Nebenwirkungen und stabile Callback-Funktionen.
+// useRef wird genutzt, um Audio-Objekte über Re-Renders hinweg zu behalten, ohne sie im State zu speichern.
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -10,52 +12,66 @@ import {
   Modal,
   Linking,
 } from "react-native";
+
+// expo-image-picker wird genutzt, um Bilder aus der Galerie zu wählen oder per Kamera aufzunehmen.
+// expo-av liefert Audio-Funktionen für Aufnahme und Wiedergabe.
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
+
+// Hilfsfunktionen, um ausgewählte Dateien in einen eigenen App-Ordner zu kopieren.
+// Damit bleiben Bild und Audio verfügbar, auch wenn die Quelle später nicht mehr existiert.
 import { saveImageToLocalAppStorageAsync } from "../services/localImages";
 import { saveAudioToLocalAppStorageAsync } from "../services/localAudio";
+
+// Design-Konstanten und wiederverwendbare UI-Styles.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function CreateTitleScreen({ navigation, route }) {
+  // kind legt fest, welcher Erstell-Flow genutzt wird.
+  // Ohne Parameter wird standardmäßig ein Termin erstellt.
   const kind = route?.params?.kind ?? "appointment";
 
   const isAppointment = kind === "appointment";
   const isNotification = kind === "notification";
   const isReminder = kind === "reminder";
 
+  // headline wird abhängig vom Typ gesetzt und nur neu berechnet, wenn sich der Typ ändert.
   const headline = useMemo(() => {
     if (isAppointment) return "Titel eingeben";
     if (isReminder) return "Reminder Text";
     return "Notification Text";
   }, [isAppointment, isReminder]);
 
+  // title ist der Haupttext, der später gespeichert wird.
   const [title, setTitle] = useState("");
 
- 
+  // Zusatzdaten für Termine: Bild, Beschreibung und deren Modal-State.
   const [imageUri, setImageUri] = useState(null);
   const [description, setDescription] = useState("");
   const [descOpen, setDescOpen] = useState(false);
   const [descDraft, setDescDraft] = useState("");
 
-  // audio memo 
+  // Sprachmemo für Termine: gespeicherte Datei und Modal-State.
   const [audioUri, setAudioUri] = useState(null);
   const [memoOpen, setMemoOpen] = useState(false);
 
-
+  // detailsOpen steuert das Bottom-Sheet, in dem Zusatzfunktionen angeboten werden.
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Weiter geht es erst, wenn ein nicht-leerer Titel eingegeben wurde.
   const canContinue = title.trim().length > 0;
 
-  // playback + recording refs 
+  // soundRef hält das aktuelle Sound-Objekt für Wiedergabe.
+  // recordingRef hält die laufende Aufnahme.
   const soundRef = useRef(null);
   const recordingRef = useRef(null);
 
+  // Statusflags für UI-Zustände bei Wiedergabe und Aufnahme.
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
-
-  // Cleanup on unmount
-
+  // Beim Verlassen des Screens wird laufende Wiedergabe gestoppt und entladen.
+  // Eine laufende Aufnahme wird ebenfalls sauber beendet.
   useEffect(() => {
     return () => {
       (async () => {
@@ -77,9 +93,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     };
   }, []);
 
- 
-  // Image handling
-
+  // Bild aus der Galerie auswählen.
+  // Vorher werden Berechtigungen abgefragt, bei Ablehnung wird ein Hinweis mit Link zu den Einstellungen gezeigt.
+  // Das ausgewählte Bild wird in den App-Ordner kopiert und die neue URI gespeichert.
   const pickFromGallery = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -116,6 +132,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     }
   }, []);
 
+  // Foto mit der Kamera aufnehmen.
+  // Berechtigung wird abgefragt, danach wird die Kamera geöffnet.
+  // Das Foto wird anschließend in den App-Ordner kopiert.
   const takePhoto = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -138,6 +157,7 @@ export default function CreateTitleScreen({ navigation, route }) {
     }
   }, []);
 
+  // Auswahl-Dialog, ob Kamera oder Galerie genutzt werden soll.
   const chooseImageSource = useCallback(() => {
     Alert.alert("Bild hinzufügen", "Quelle auswählen", [
       { text: "Kamera", onPress: takePhoto },
@@ -146,9 +166,8 @@ export default function CreateTitleScreen({ navigation, route }) {
     ]);
   }, [pickFromGallery, takePhoto]);
 
- 
-  // Audio memo handling
-
+  // Wiedergabe stoppen und Sound-Objekt freigeben.
+  // Dadurch wird verhindert, dass mehrere Sounds gleichzeitig laufen.
   const stopPlayback = useCallback(async () => {
     try {
       if (!soundRef.current) {
@@ -162,6 +181,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     setIsPlaying(false);
   }, []);
 
+  // Aufnahme starten.
+  // Berechtigung wird abgefragt, laufende Wiedergabe wird beendet.
+  // Danach wird der Audiomodus passend für Aufnahme gesetzt und die Recording-Instanz gestartet.
   const startRecording = useCallback(async () => {
     try {
       const perm = await Audio.requestPermissionsAsync();
@@ -192,6 +214,8 @@ export default function CreateTitleScreen({ navigation, route }) {
     }
   }, [stopPlayback]);
 
+  // Aufnahme stoppen, Datei-URI holen und in den App-Ordner kopieren.
+  // Danach wird der Audiomodus wieder auf normales Abspielen zurückgestellt.
   const stopRecording = useCallback(async () => {
     try {
       if (!recordingRef.current) return;
@@ -225,6 +249,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     }
   }, []);
 
+  // Wiedergabe umschalten.
+  // Wenn bereits gespielt wird, wird gestoppt. Andernfalls wird der Sound neu geladen und abgespielt.
+  // Ein Status-Listener sorgt dafür, dass nach dem Ende automatisch gestoppt wird.
   const togglePlay = useCallback(async () => {
     try {
       if (!audioUri) return;
@@ -256,27 +283,25 @@ export default function CreateTitleScreen({ navigation, route }) {
     }
   }, [audioUri, isPlaying, stopPlayback]);
 
+  // Memo entfernen: erst Wiedergabe stoppen, dann die gespeicherte URI löschen.
   const removeMemo = useCallback(async () => {
     await stopPlayback();
     setAudioUri(null);
   }, [stopPlayback]);
 
-
-  // description modal helpers
-
+  // Beschreibung öffnen: vorhandener Text wird in den Draft kopiert, dann wird das Modal geöffnet.
   const openDescription = useCallback(() => {
     setDescDraft(description || "");
     setDescOpen(true);
   }, [description]);
 
+  // Beschreibung speichern: Text wird getrimmt übernommen und das Modal geschlossen.
   const saveDescription = useCallback(() => {
     setDescription(descDraft.trim());
     setDescOpen(false);
   }, [descDraft]);
 
-
-  // details sheet helpers
-
+  // Bottom-Sheet nur für Termine öffnen, andere Typen bekommen keine Zusatzdetails.
   const openDetailsSheet = useCallback(() => {
     if (!isAppointment) return;
     setDetailsOpen(true);
@@ -284,6 +309,7 @@ export default function CreateTitleScreen({ navigation, route }) {
 
   const closeDetailsSheet = useCallback(() => setDetailsOpen(false), []);
 
+  // Auswahl aus dem Sheet: erst Sheet schließen, dann die passende Funktion öffnen.
   const openDescriptionFromSheet = useCallback(() => {
     setDetailsOpen(false);
     openDescription();
@@ -299,7 +325,9 @@ export default function CreateTitleScreen({ navigation, route }) {
     setMemoOpen(true);
   }, []);
 
-
+  // Weiter-Navigation in den Datums-Screen.
+  // Draft wird aufgebaut und enthält je nach Typ unterschiedliche Felder.
+  // Bild, Beschreibung und Audio werden nur bei Terminen mitgegeben.
   const goNext = useCallback(() => {
     if (!canContinue) return;
 
@@ -319,11 +347,12 @@ export default function CreateTitleScreen({ navigation, route }) {
     });
   }, [canContinue, navigation, kind, title, isAppointment, imageUri, description, audioUri]);
 
-
-
-
+  // showExtrasSummary steuert, ob die kleine Zusammenfassung der Zusatzdaten angezeigt wird.
   const showExtrasSummary = isAppointment && (imageUri || description?.trim() || audioUri);
 
+  // UI-Aufbau: Überschrift, Eingabefeld für Titel und Weiter-Button.
+  // Bei Terminen wird zusätzlich eine Zeile angezeigt, die Summary und den Plus-Button für Details enthält.
+  // Danach folgen die Modals: Details-Sheet, Beschreibung, Sprachmemo und optional die Bildvorschau.
   return (
     <View
       style={[
@@ -354,7 +383,6 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Text>
       </Pressable>
 
-
       {isAppointment ? (
         <View style={styles.detailsRow}>
           <View style={styles.detailsCenter}>
@@ -377,8 +405,6 @@ export default function CreateTitleScreen({ navigation, route }) {
   </View>
 ) : null}
 
-
-      {/* -------------------- Details Bottom Sheet -------------------- */}
       <Modal
         visible={detailsOpen}
         transparent
@@ -410,7 +436,6 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
-      {/* -------------------- Description Modal -------------------- */}
       <Modal
         visible={descOpen}
         transparent
@@ -442,7 +467,6 @@ export default function CreateTitleScreen({ navigation, route }) {
           </Pressable>
         </Pressable>
       </Modal>
-
 
       <Modal
         visible={memoOpen}
@@ -504,7 +528,6 @@ export default function CreateTitleScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
-      {/* Optional inline image preview under everything*/}
       {isAppointment && imageUri ? (
         <View style={[UI.bordered, styles.previewCard]}>
           <Image source={{ uri: imageUri }} style={styles.previewImage} />
@@ -517,6 +540,8 @@ export default function CreateTitleScreen({ navigation, route }) {
   );
 }
 
+// Styles: Container, Eingabefeld, Detailzeile mit Summary und Plus-Button.
+// Außerdem Styles für Bottom-Sheet, Modals und Bildvorschau.
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
@@ -548,12 +573,10 @@ detailsRow: {
   marginTop: 12,
 },
 
-
 detailsCenter: {
   flex: 1,
   alignItems: "center",
 },
-
 
   squareBtn: {
     width: 56,
@@ -575,7 +598,6 @@ detailsCenter: {
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     minWidth: 160,
-    //alignItems: "center",
   },
 
   summaryLine: {
@@ -585,7 +607,6 @@ detailsCenter: {
     textAlign: "center",
   },
 
-  // Sheet
   sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
@@ -633,7 +654,6 @@ detailsCenter: {
     color: COLORS.textMuted,
   },
 
-  // Modals
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -678,7 +698,6 @@ detailsCenter: {
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
-
   },
 
   modalBtnText: {
@@ -691,7 +710,6 @@ detailsCenter: {
     paddingVertical: 12,
     alignItems: "center",
     backgroundColor: COLORS.surface,
-   
   },
 
   btnDisabled: {
@@ -699,7 +717,6 @@ detailsCenter: {
     backgroundColor: COLORS.disabled,
   },
 
-  // Image preview
   previewCard: {
     marginTop: 18,
     borderRadius: 14,

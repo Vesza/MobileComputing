@@ -1,27 +1,43 @@
+// React Hooks für State, Effekte und Ref für Timer-Verwaltung.
 import { useEffect, useRef, useState } from "react";
+
+// React Native UI-Bausteine für Layout, Eingaben, Buttons und Styles.
 import { View, Text, TextInput, Button, StyleSheet } from "react-native";
+
+// Firebase Auth Funktionen für Registrierung, Verifizierungsmail und Abmelden nach Registrierung.
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
   signOut,
 } from "firebase/auth";
+
+// Firebase-Instanzen für Auth und Firestore.
 import { auth, db } from "../services/FirebaseConfig";
+
+// Firestore Helpers zum Anlegen/Aktualisieren eines User-Dokuments mit Server-Zeitstempel.
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
+// Zentrale Styles und Konstanten für Layout und Typografie.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function RegisterScreen({ navigation }) {
+  // Eingabefelder für E-Mail und zwei Passwortfelder, plus Statusmeldung für Feedback.
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [status, setStatus] = useState("");
+
+  // Ref hält den Timer, um Statusmeldungen nach kurzer Zeit wieder zu entfernen.
   const statusTimerRef = useRef(null);
 
+  // Cleanup: Timer beim Verlassen des Screens stoppen, damit kein setState nach Unmount passiert.
   useEffect(() => {
     return () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
     };
   }, []);
 
+  // Zeigt eine Statusmeldung für eine feste Dauer und ersetzt eine vorherige Meldung sauber.
   const showTemporaryStatus = (message) => {
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
 
@@ -32,6 +48,8 @@ export default function RegisterScreen({ navigation }) {
     }, 5000);
   };
 
+  // Registrierung: Eingaben prüfen, Account anlegen, User-Dokument schreiben, Verifizierungsmail senden.
+  // Danach wird bewusst abgemeldet und auf den Verify-Screen weitergeleitet.
   const handleRegister = async () => {
     if (!email || !pw || !pw2) {
       showTemporaryStatus("Bitte alle Felder ausfüllen.");
@@ -48,6 +66,7 @@ export default function RegisterScreen({ navigation }) {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), pw);
       const user = cred.user;
 
+      // User-Dokument in Firestore: Basisdaten + Zeitstempel.
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
         createdAt: serverTimestamp(),
@@ -55,17 +74,21 @@ export default function RegisterScreen({ navigation }) {
         emailVerified: user.emailVerified,
       });
 
+      // Verifizierungslink senden und Session beenden, damit der Login-Flow sauber bleibt.
       await sendEmailVerification(user);
       await signOut(auth);
 
+      // Lokale Felder und Status zurücksetzen.
       setPw("");
       setPw2("");
       setStatus("");
 
+      // Wechsel zum Verify-Screen, E-Mail wird zur Anzeige übergeben.
       navigation.navigate("Verify", { email: email.trim() });
     } catch (e) {
       console.log("Registrierungs-Fehler:", e);
 
+      // Fehlermeldungen anhand typischer Firebase Auth Codes.
       let message = "Registrierung fehlgeschlagen.";
 
       if (e.code === "auth/email-already-in-use") {
@@ -80,6 +103,8 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
+  // UI: Formular mit drei Inputs, zwei Buttons und optionaler Statusmeldung.
+  // Padding berücksichtigt Safe-Areas über LAYOUT.offsets.
   return (
     <View
       style={[
@@ -132,6 +157,7 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
+// Styles: Container zentriert den Inhalt, Inputs haben Oberfläche/Border und Status ist dezent.
 const styles = StyleSheet.create({
   container: {
     justifyContent: "center",

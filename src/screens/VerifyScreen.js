@@ -1,16 +1,30 @@
+// React Hooks: useState für Status-Text, useCallback für stabile Handler-Funktionen.
 import { useCallback, useState } from "react";
+
+// UI-Bausteine für Screen-Aufbau und Buttons.
 import { View, Text, Button, StyleSheet } from "react-native";
+
+// Firebase Funktion zum erneuten Senden der Verifizierungs-Mail.
 import { sendEmailVerification } from "firebase/auth";
+
+// Auth-Instanz, um auf currentUser zuzugreifen.
 import { auth } from "../services/FirebaseConfig";
+
+// Zentrale Styles und Konstanten für Layout und Typografie.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 
 export default function VerifyScreen({ navigation, route }) {
+  // E-Mail kann entweder aus den Route-Params kommen oder direkt vom eingeloggten User.
+  // Dadurch funktioniert der Screen sowohl nach Registrierung als auch nach Login.
   const emailFromRoute = route?.params?.email ?? "";
   const email = auth.currentUser?.email ?? emailFromRoute ?? "";
   const isSignedIn = !!auth.currentUser;
 
+  // Statusmeldung für Feedback an den Nutzer, z. B. "Link erneut gesendet".
   const [status, setStatus] = useState("");
 
+  // Erneutes Senden der Bestätigungs-Mail.
+  // Geht nur, wenn ein User aktuell eingeloggt ist.
   const handleResend = useCallback(async () => {
     try {
       const u = auth.currentUser;
@@ -26,6 +40,8 @@ export default function VerifyScreen({ navigation, route }) {
     }
   }, []);
 
+  // Prüft, ob die E-Mail inzwischen bestätigt wurde.
+  // Wichtig: emailVerified aktualisiert sich nicht immer automatisch, daher reload + Token refresh.
   const handleCheck = useCallback(async () => {
     try {
       const u = auth.currentUser;
@@ -50,6 +66,8 @@ export default function VerifyScreen({ navigation, route }) {
     }
   }, [navigation]);
 
+  // UI: Hinweistext mit E-Mail, je nach Login-Status unterschiedliche Buttons.
+  // Padding berücksichtigt Safe-Areas über LAYOUT.offsets.
   return (
     <View
       style={[
@@ -82,6 +100,7 @@ export default function VerifyScreen({ navigation, route }) {
   );
 }
 
+// Styles: Text zentriert, E-Mail hervorgehoben, Status dezent darunter.
 const styles = StyleSheet.create({
   text: {
     textAlign: "center",

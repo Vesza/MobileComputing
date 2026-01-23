@@ -1,7 +1,16 @@
+// React wird für die Komponente benötigt.
+// Modal/Pressable/Text/View sind UI-Bausteine für ein Overlay mit klickbaren Bereichen.
+// StyleSheet wird für die Styles genutzt.
 import React from "react";
 import { Modal, Pressable, Text, View, StyleSheet } from "react-native";
 import { COLORS } from "../constants";
 
+// ConfirmModal ist ein wiederverwendbares Bestätigungs-Modal.
+// visible steuert, ob es angezeigt wird.
+// title/subtitle sind die Texte im Modal.
+// loading deaktiviert Buttons und zeigt einen "Lösche..."-Text an.
+// onCancel und onConfirm sind Callback-Funktionen für Abbrechen/Bestätigen.
+// confirmText/denyText/cancelText sind anpassbare Button-Texte.
 export default function ConfirmModal({
   visible,
   title,
@@ -72,6 +81,11 @@ export default function ConfirmModal({
   );
 }
 
+// Styles für das Modal:
+// backdrop ist der abgedunkelte Hintergrund, der auch zum Schließen angetippt werden kann.
+// box ist der eigentliche Dialog.
+// buttonsRow ordnet die oberen zwei Buttons nebeneinander an.
+// btn enthält Basis-Button-Styling, Varianten passen Farbe/Breite/Disabled an.
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,

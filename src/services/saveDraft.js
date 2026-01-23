@@ -1,41 +1,52 @@
+// Firestore: wir schreiben neue Dokumente in die Unter-Collections des Users.
+// serverTimestamp wird genutzt, damit die Zeit vom Server kommt und nicht vom Gerät.
 import { addDoc, collection, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "./FirebaseConfig";
+
+// Scheduling für lokale Notifications.
+// cancelScheduledAsync wird als Absicherung genutzt, falls Firestore schreiben fehlschlägt.
 import {
   scheduleLocalReminderAsync,
   scheduleLocalNotificationAsync,
   cancelScheduledAsync,
 } from "./notify";
+
+// Datum/Time Parsing und Dauer-Absicherung.
 import { clampDurationSec, toDateFromStrings } from "../utils/datetime";
 
-/**
- * Saves a create-flow draft to Firestore and schedules local notifications when needed.
- *
- * @param {object} params
- * @param {object} params.draft - draft object from create flow
- * @param {string} params.uid - firebase auth user uid
- * @returns {Promise<{ ok: true, kind: string, toast: string, docId?: string } | { ok: false, reason: string, toast: string }>}
- */
+// Speichert einen Draft aus dem Create-Flow.
+// Für Appointments wird nur Firestore beschrieben.
+// Für Reminders/Notifications wird zusätzlich eine lokale Notification geplant und die scheduledId mitgespeichert.
 export async function saveDraft({ draft, uid }) {
+  // Wird gesetzt, sobald wir eine lokale Notification geplant haben.
+  // Falls danach Firestore fehlschlägt, können wir die Planung wieder zurückrollen.
   let scheduledId = null;
 
   try {
+    // Ohne eingeloggten User können wir nicht speichern, weil der Pfad users/{uid}/... fehlt.
     if (!uid) {
       return { ok: false, reason: "not_logged_in", toast: "Nicht eingeloggt." };
     }
 
+    // Defensive Defaults, damit die Funktion auch bei undefiniertem draft stabil bleibt.
     const safeDraft = draft ?? { kind: "appointment" };
     const kind = safeDraft.kind ?? "appointment";
 
+    // Basisfelder aus dem Draft ziehen und sauber normalisieren.
     const title =
       typeof safeDraft.title === "string" ? safeDraft.title.trim() : "";
     const date = safeDraft.date ?? "";
     const time = safeDraft.time ?? "";
 
+    // Dauer wird auf 1–30 Sekunden begrenzt.
+    // Default ist 10s für Reminder, sonst 3s.
     const durationSec = clampDurationSec(
       safeDraft.durationSec,
       kind === "reminder" ? 10 : 3
     );
 
+    // Optionale Felder für Termine.
+    // Bei fehlendem String wird null gespeichert, damit Firestore ein sauberes Schema hat.
     const description =
       typeof safeDraft.description === "string"
         ? safeDraft.description.trim()
@@ -47,14 +58,17 @@ export async function saveDraft({ draft, uid }) {
     const audioUri =
       typeof safeDraft.audioUri === "string" ? safeDraft.audioUri : null;
 
+    // Mindestvalidierung: Titel, Datum und Uhrzeit müssen vorhanden sein.
     if (!title || !date || !time) {
       return { ok: false, reason: "invalid_data", toast: "Ungültige Daten." };
     }
 
+    // Aus den Strings wird ein echtes Date-Objekt gebaut.
     const when = toDateFromStrings(date, time);
     const now = new Date();
 
-
+    // Für Reminder/Notifications verhindern wir Zeiten in der Vergangenheit.
+    // +10s Puffer, damit es nicht knapp an "jetzt" scheitert.
     if (
       (kind === "reminder" || kind === "notification") &&
       when.getTime() <= now.getTime() + 10_000
@@ -66,6 +80,7 @@ export async function saveDraft({ draft, uid }) {
       };
     }
 
+    // Termin: nur in Firestore schreiben, keine lokale Notification.
     if (kind === "appointment") {
       const ref = await addDoc(collection(db, "users", uid, "appointments"), {
         title,
@@ -79,6 +94,7 @@ export async function saveDraft({ draft, uid }) {
       return { ok: true, kind, toast: "Termin gespeichert", docId: ref.id };
     }
 
+    // Reminder: lokale Notification planen und scheduledId zusammen mit dem Dokument speichern.
     if (kind === "reminder") {
       scheduledId = await scheduleLocalReminderAsync({
         title,
@@ -97,7 +113,8 @@ export async function saveDraft({ draft, uid }) {
       return { ok: true, kind, toast: "Reminder gespeichert", docId: ref.id };
     }
 
-    // notification
+    // Notification: ebenfalls lokal planen, aber Body/Text kommt aus title.
+    // In Firestore wird unter notifications gespeichert, damit Listen/Queries sauber getrennt sind.
     scheduledId = await scheduleLocalNotificationAsync({
       text: title,
       fireAtDate: when,
@@ -116,7 +133,8 @@ export async function saveDraft({ draft, uid }) {
   } catch (e) {
     console.log("saveDraft error:", e);
 
-    // rollback local schedule if firestore write failed after scheduling
+    // Falls die lokale Notification bereits geplant wurde, aber Firestore dann scheitert,
+    // räumen wir auf, damit nicht später eine "verwaiste" Notification ausgelöst wird.
     try {
       if (scheduledId) await cancelScheduledAsync(scheduledId);
     } catch {}

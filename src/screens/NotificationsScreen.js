@@ -1,12 +1,25 @@
+// React Hooks für State, Memoization und stabile Callback-Funktionen.
+// React Native Komponenten für Layout und eine performante Liste.
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
+
+// Firestore: Liste der Notifications live abonnieren, sortieren und Einträge löschen.
 import { collection, onSnapshot, orderBy, query, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../services/FirebaseConfig";
+
+// Bei gelöschten Notifications wird zusätzlich die lokal geplante Notification abgebrochen.
 import { cancelScheduledAsync } from "../services/notify";
+
+// Wiederverwendbares Bestätigungs-Modal für Löschaktionen.
 import ConfirmModal from "../components/ConfirmModal";
+
+// Gemeinsame Styles und Layout-Abstände.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
+
+// Zugriff auf den eingeloggten User, um auf den richtigen Pfad in Firestore zuzugreifen.
 import { useAuth } from "../context/AuthContext";
 
+// Hilfsfunktion zur Anzeige von Datum + Uhrzeit in deutschem Format.
 function formatDateTime(d) {
   return d.toLocaleString("de-DE", {
     weekday: "short",
@@ -21,11 +34,17 @@ function formatDateTime(d) {
 export default function NotificationsScreen({ navigation }) {
   const { user } = useAuth();
 
+  // items enthält die aus Firestore geladenen Notifications.
   const [items, setItems] = useState([]);
 
-  const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, scheduledId } 
+  // deleteTarget speichert den Eintrag, der gerade gelöscht werden soll.
+  // deleting verhindert Mehrfachklicks und steuert den Ladezustand im Modal.
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, scheduledId }
   const [deleting, setDeleting] = useState(false);
 
+  // Firestore Live-Query:
+  // Lädt die Notifications des Users, sortiert nach fireAt und aktualisiert sich automatisch bei Änderungen.
+  // Bei fehlendem user.uid wird die Liste geleert und kein Listener gesetzt.
   useEffect(() => {
     if (!user?.uid) {
       setItems([]);
@@ -58,17 +77,24 @@ export default function NotificationsScreen({ navigation }) {
     return unsub;
   }, [user?.uid]);
 
+  // Derived State: einfacher Boolean, ob die Liste leer ist.
   const empty = useMemo(() => items.length === 0, [items]);
 
+  // Öffnet das Delete-Modal und merkt sich die wichtigsten Felder.
   const openDeletePopup = useCallback((it) => {
     setDeleteTarget({ id: it.id, text: it.text, scheduledId: it.scheduledId });
   }, []);
 
+  // Schließt das Delete-Modal, außer es läuft gerade ein Löschvorgang.
   const closeDeletePopup = useCallback(() => {
     if (deleting) return;
     setDeleteTarget(null);
   }, [deleting]);
 
+  // Löscht eine Notification:
+  // 1) optional geplante lokale Notification abbrechen
+  // 2) Dokument in Firestore löschen
+  // 3) Modal schließen und Ladezustand zurücksetzen
   const confirmDelete = useCallback(async () => {
     try {
       if (!user?.uid || !deleteTarget) return;
@@ -88,6 +114,7 @@ export default function NotificationsScreen({ navigation }) {
     }
   }, [user?.uid, deleteTarget]);
 
+  // Öffnet den Detail-Screen und übergibt die Daten als Route-Params.
   const openDetail = useCallback(
     (it) => {
       navigation.navigate("Detail", {
@@ -102,6 +129,10 @@ export default function NotificationsScreen({ navigation }) {
     [navigation]
   );
 
+  // UI:
+  // Titel + entweder Empty-State oder eine FlatList.
+  // Jede Zeile führt zum Detail, daneben ein Button zum Löschen, der das Öffnen des Details verhindert.
+  // ConfirmModal wird am Ende gerendert und ist sichtbar, sobald deleteTarget gesetzt ist.
   return (
     <View
       style={[
@@ -161,6 +192,8 @@ export default function NotificationsScreen({ navigation }) {
   );
 }
 
+// Styles für Titel, Empty-State und Listenzeilen.
+// row ist die klickbare Zeile, trashPressable ist der separate Bereich zum Löschen.
 const styles = StyleSheet.create({
   title: {
     fontSize: FONT_SIZE.title,

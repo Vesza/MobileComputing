@@ -1,5 +1,10 @@
+// React Hooks: State für Daten aus Firestore und UI-Zustände, Refs für Toast-Deduplizierung.
 import React, { useEffect, useMemo, useState, useRef } from "react";
+
+// Basis-UI: Layout-Container, Text, klickbare Elemente und ScrollView für Listen.
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+
+// Firestore: Queries, Filter, Sortierung und Live-Updates über onSnapshot.
 import {
   collection,
   onSnapshot,
@@ -9,23 +14,34 @@ import {
   Timestamp,
   limit,
 } from "firebase/firestore";
+
+// Firestore-Instanz aus der App-Konfiguration.
 import { db } from "../services/FirebaseConfig";
+
+// Zentrale Styles und Konstanten für Layout und Typografie.
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
+
+// Auth-Kontext, um die aktuelle User-ID zu bekommen.
 import { useAuth } from "../context/AuthContext";
+
+// Toast-Komponente für kurze Rückmeldungen, z. B. nach dem Speichern eines Termins.
 import Toast from "../components/Toast";
 
+// Hilfsfunktion: Startzeitpunkt von heute für Firestore Range-Query.
 function startOfTodayDate() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
+// Hilfsfunktion: Endzeitpunkt von heute für Firestore Range-Query.
 function endOfTodayDate() {
   const d = new Date();
   d.setHours(23, 59, 59, 999);
   return d;
 }
 
+// Formatiert das heutige Datum als Überschrift im deutschen Format.
 function formatTodayHeader(d) {
   return d.toLocaleDateString("de-DE", {
     weekday: "long",
@@ -35,10 +51,12 @@ function formatTodayHeader(d) {
   });
 }
 
+// Formatiert eine Uhrzeit für die Terminliste.
 function formatTime(d) {
   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
+// Kleines Kalender-Icon, das den Tag des Monats anzeigt.
 function CalendarDateIcon({ date }) {
   const day = String(date.getDate());
   return (
@@ -50,20 +68,27 @@ function CalendarDateIcon({ date }) {
 }
 
 export default function WelcomeScreen({ navigation, route }) {
+  // User wird gebraucht, um die richtigen Unter-Collections im Firestore zu lesen.
   const { user } = useAuth();
 
+  // Heute-Datum im State, damit sich der Screen bei Tageswechsel aktualisieren kann.
   const [todayDate, setTodayDate] = useState(() => new Date());
+
+  // Abgeleitete Anzeige für das heutige Datum.
   const todayLabel = useMemo(() => formatTodayHeader(todayDate), [todayDate]);
 
+  // Liste der heutigen Termine aus Firestore.
   const [todayItems, setTodayItems] = useState([]);
 
+  // Kleine Übersicht: die nächsten Notifications, begrenzt auf 5 Einträge.
   const [notifications, setNotifications] = useState([]);
 
-  // Toast state
+  // Toast: verhindert, dass die gleiche Toast-Nachricht mehrfach nacheinander angezeigt wird.
   const lastToastRef = useRef(null);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
 
+  // Wenn per Navigation ein Toast-Text reinkommt, kurz anzeigen und dann wieder ausblenden.
   useEffect(() => {
     const msg = route?.params?.toast;
     if (!msg) return;
@@ -82,6 +107,7 @@ export default function WelcomeScreen({ navigation, route }) {
     return () => clearTimeout(t);
   }, [route?.params?.toast]);
 
+  // Aktualisiert todayDate regelmäßig, damit bei Mitternacht ein neuer Tag erkannt wird.
   useEffect(() => {
     const tick = setInterval(() => {
       const now = new Date();
@@ -90,6 +116,8 @@ export default function WelcomeScreen({ navigation, route }) {
     return () => clearInterval(tick);
   }, []);
 
+  // Firestore Live-Query für alle Termine, die heute stattfinden.
+  // Es werden zusätzliche Felder (Bild, Beschreibung, Audio) mitgenommen, damit Detail direkt befüllt wird.
   useEffect(() => {
     if (!user?.uid) {
       setTodayItems([]);
@@ -131,6 +159,7 @@ export default function WelcomeScreen({ navigation, route }) {
     return unsub;
   }, [user?.uid]);
 
+  // Firestore Live-Query für die nächsten Notifications, als kleine Vorschau auf dem Homescreen.
   useEffect(() => {
     if (!user?.uid) {
       setNotifications([]);
@@ -162,6 +191,8 @@ export default function WelcomeScreen({ navigation, route }) {
     return unsub;
   }, [user?.uid]);
 
+  // Öffnet die Detailansicht und übergibt die wichtigsten Felder als Route-Params.
+  // startsAt wird als ISO-String übergeben, damit es stabil serialisierbar ist.
   const openDetail = (it) => {
     navigation.navigate("Detail", {
       type: "appointment",
@@ -176,6 +207,7 @@ export default function WelcomeScreen({ navigation, route }) {
     });
   };
 
+  // Screen-Layout: Quote oben, Tagesfrage + Inhalte in der Mitte, Bottom-Buttons und Footer.
   return (
     <View
       style={[
@@ -222,31 +254,29 @@ export default function WelcomeScreen({ navigation, route }) {
           </View>
         )}
 
+        <View style={[UI.bordered, styles.smallCard]}>
+          <View style={styles.cardHeaderRow}>
+            <Pressable onPress={() => navigation.navigate("Notifications")}>
+              <Text style={styles.cardTitle}>Notifications</Text>
+            </Pressable>
+          </View>
 
-<View style={[UI.bordered, styles.smallCard]}>
-  <View style={styles.cardHeaderRow}>
-    <Pressable onPress={() => navigation.navigate("Notifications")}>
-      <Text style={styles.cardTitle}>Notifications</Text>
-    </Pressable>
-  </View>
-
-  {notifications.length > 0 ? (
-    notifications.map((n) => (
-      <View key={n.id} style={[UI.bordered, styles.smallRow]}>
-        <Text style={styles.smallRowTitle} numberOfLines={1}>
-          {n.text}
-        </Text>
-      </View>
-    ))
-  ) : (
-    <Text style={styles.cardEmpty}>Keine Notifications vorhanden.</Text>
-  )}
-</View>
-
+          {notifications.length > 0 ? (
+            notifications.map((n) => (
+              <View key={n.id} style={[UI.bordered, styles.smallRow]}>
+                <Text style={styles.smallRowTitle} numberOfLines={1}>
+                  {n.text}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.cardEmpty}>Keine Notifications vorhanden.</Text>
+          )}
+        </View>
       </View>
 
-      
-      <View style={[styles.bottomRow, { bottom: LAYOUT.offsets.bottom + -40}]}>
+      {/* Floating Buttons: Kalender öffnet die Terminübersicht, Plus öffnet QuickActions. */}
+      <View style={[styles.bottomRow, { bottom: LAYOUT.offsets.bottom + -40 }]}>
         <Pressable
           style={[UI.bordered, styles.squareBtn]}
           onPress={() => navigation.navigate("Calendar")}
@@ -262,18 +292,21 @@ export default function WelcomeScreen({ navigation, route }) {
         </Pressable>
       </View>
 
+      {/* Toast wird außerhalb der Scrollbereiche gerendert, damit er darüber liegt. */}
       <Toast visible={toastVisible} message={toastMsg} />
+
+      {/* Footer-Link zum Impressum, bewusst am unteren Rand platziert. */}
       <Pressable
         style={styles.footer}
         onPress={() => navigation.navigate("Impressum")}
       >
         <Text style={styles.footerText}>Impressum</Text>
       </Pressable>
-
     </View>
   );
 }
 
+// Styles: Grundlayout, Karten-Optik, Listenzeilen und Footer.
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
 
@@ -343,16 +376,15 @@ const styles = StyleSheet.create({
 
   emptyText: { color: COLORS.textMuted, textAlign: "center" },
 
-bottomRow: {
-  position: "absolute",
-  left: 16,
-  right: 16,
-  flexDirection: "row",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 8,
-},
-
+  bottomRow: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 8,
+  },
 
   squareBtn: {
     width: 56,
@@ -398,9 +430,7 @@ bottomRow: {
   quoteBlock: {
     width: "100%",
     alignSelf: "stretch",
-    //marginTop: 4,
     marginBottom: 36,
-    //paddingHorizontal: 32,
   },
 
   quoteText: {
@@ -453,17 +483,17 @@ bottomRow: {
     fontWeight: FONT_WEIGHT.bold,
   },
 
+  // Footer: schmaler Linkbereich, damit das Impressum immer erreichbar ist.
   footer: {
-  width: "100%",
-  alignItems: "center",
-  borderTopWidth: 1,
-  borderTopColor: COLORS.border,
-},
+    width: "100%",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
 
-footerText: {
-  fontSize: 12,
-  color: COLORS.textMuted,
-  textDecorationLine: "underline",
-},
-
+  footerText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textDecorationLine: "underline",
+  },
 });

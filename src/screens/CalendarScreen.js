@@ -1,3 +1,5 @@
+// React wird für die Komponente benötigt, Hooks steuern State, Berechnungen und Callbacks.
+// View/Text/Pressable/Modal/SectionList sind UI-Bausteine für Liste und Lösch-Dialog.
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
@@ -7,6 +9,10 @@ import {
   Modal,
   SectionList,
 } from "react-native";
+
+// Firestore-Funktionen für Live-Updates und Löschen.
+// query/where/orderBy bauen die Abfrage, onSnapshot liefert Änderungen in Echtzeit.
+// Timestamp wird genutzt, um Date-Objekte als Firestore-Timestamp zu vergleichen.
 import {
   collection,
   onSnapshot,
@@ -21,12 +27,14 @@ import { db } from "../services/FirebaseConfig";
 import { UI, LAYOUT, COLORS, FONT_SIZE, FONT_WEIGHT } from "../constants";
 import { useAuth } from "../context/AuthContext";
 
+// Hilfsfunktion: setzt eine Zeit auf Tagesanfang, damit Gruppierung und Filter sauber funktionieren.
 function startOfDay(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
 
+// Formatiert das Datum für die Überschrift einer Section in der SectionList.
 function formatDateHeader(d) {
   return d.toLocaleDateString("de-DE", {
     weekday: "long",
@@ -36,23 +44,30 @@ function formatDateHeader(d) {
   });
 }
 
+// Formatiert eine Uhrzeit für die Anzeige in der Terminzeile.
 function formatTime(d) {
   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function CalendarScreen({ navigation }) {
+  // uid wird für den Firestore-Pfad benötigt.
   const { user } = useAuth();
 
+  // Abstände werden aus Layout-Konstanten übernommen, damit es auf iOS/Android passt.
   const bottomPadding = LAYOUT.offsets.bottom;
   const topPadding = LAYOUT.offsets.top;
 
+  // items hält die geladenen Termine aus Firestore.
   const [items, setItems] = useState([]);
 
-  // Delete modal state
+  // deleteTarget enthält das Element, das gerade gelöscht werden soll.
+  // deleting sperrt die Buttons während der Löschaktion.
   const [deleteTarget, setDeleteTarget] = useState(null); 
   const [deleting, setDeleting] = useState(false);
 
-
+  // Live-Abfrage: lädt alle Termine ab heute und hört auf Änderungen.
+  // Wenn kein User vorhanden ist, wird die Liste geleert.
+  // Rückgabe von unsub sorgt dafür, dass der Listener beim Verlassen des Screens entfernt wird.
   useEffect(() => {
     if (!user?.uid) {
       setItems([]);
@@ -95,9 +110,8 @@ export default function CalendarScreen({ navigation }) {
     return unsub;
   }, [user?.uid]);
 
-
-  // SectionList grouping
- 
+  // Aus items werden Sections gebaut, damit Termine nach Tagen gruppiert dargestellt werden.
+  // Map sammelt alle Termine pro Tag, danach werden Tage und Termine sortiert.
   const sections = useMemo(() => {
     const map = new Map();
 
@@ -120,18 +134,19 @@ export default function CalendarScreen({ navigation }) {
     }));
   }, [items]);
 
-
-  // delete handling
-
+  // Öffnet den Lösch-Dialog für einen Termin.
   const openDeletePopup = useCallback((it) => {
     setDeleteTarget({ id: it.id, title: it.title });
   }, []);
 
+  // Schließt den Lösch-Dialog, außer gerade läuft ein Delete.
   const closeDeletePopup = useCallback(() => {
     if (deleting) return;
     setDeleteTarget(null);
   }, [deleting]);
 
+  // Löscht das ausgewählte Dokument aus Firestore.
+  // Währenddessen wird deleting gesetzt, damit keine Doppelaktionen passieren.
   const confirmDelete = useCallback(async () => {
     try {
       if (!user?.uid || !deleteTarget) return;
@@ -148,9 +163,8 @@ export default function CalendarScreen({ navigation }) {
     }
   }, [user?.uid, deleteTarget]);
 
-
-  // Navigation
-
+  // Öffnet die Detailansicht und übergibt die Daten im erwarteten Format.
+  // startsAt wird als ISO-String übergeben, damit es auf der Detailseite wieder als Date geparst werden kann.
   const openDetail = useCallback(
     (item) => {
       navigation.navigate("Detail", {
@@ -168,9 +182,10 @@ export default function CalendarScreen({ navigation }) {
     [navigation]
   );
 
-
-  // Render
-
+  // SectionList rendert gruppiert nach Tag.
+  // In jeder Zeile öffnet ein Tap die Detailansicht.
+  // Ein LongPress oder der ⋯-Button öffnet den Löschdialog.
+  // Wenn keine Termine vorhanden sind, wird ein Hinweis angezeigt.
   return (
     <View
       style={[
@@ -217,7 +232,8 @@ export default function CalendarScreen({ navigation }) {
         }
       />
 
-
+      {/* Modal wird angezeigt, sobald deleteTarget gesetzt ist.
+          Tap außerhalb schließt den Dialog, außer während eines laufenden Deletes. */}
       <Modal
         visible={!!deleteTarget}
         transparent
@@ -255,6 +271,10 @@ export default function CalendarScreen({ navigation }) {
   );
 }
 
+// Styles für Layout und Darstellung der Liste.
+// sectionHeader ist die Tagesüberschrift.
+// row/rowMain sind die Terminzeile, moreBtn ist der ⋯-Button.
+// modalBackdrop/modalBox und die Button-Styles steuern das Aussehen des Löschdialogs.
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20 },
 
